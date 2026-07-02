@@ -12,7 +12,8 @@
 
 bot.joannes.kr {
 	# 장부장 컨테이너로 전달.
-	#  - 같은 docker compose 네트워크면: teambi-agent:49877
-	#  - 같은 호스트에서 포트 노출로 돌리면: localhost:49877
-	reverse_proxy localhost:49877
+	#  - docker-compose.caddy.yml로 함께 띄우는 경우(권장): 서비스 이름 teambi-agent:49877
+	#    (Caddy 컨테이너 내부의 localhost는 Caddy 자신이라 localhost:49877은 동작하지 않음)
+	#  - Caddy를 호스트에 직접 설치하고 장부장은 포트 노출로 돌리는 경우: localhost:49877
+	reverse_proxy teambi-agent:49877
 }

@@ -15,3 +15,6 @@ node_modules/
 .env
 npm-debug.log*
 .DS_Store
+
+# Caddy 실사용 설정 (도메인 포함 — .example만 커밋)
+deploy/Caddyfile
