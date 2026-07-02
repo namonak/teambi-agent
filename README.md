@@ -80,15 +80,16 @@ npm run dev
 3. 생성 직후 **1회만 표시되는 보안 토큰**을 복사해 `.env`의 `TEAMS_WEBHOOK_SECRET`에 저장 → 재시작
 4. 채널에서 `@장부장 <문자 붙여넣기 또는 자연어>`로 사용
 
-> **공개 주소**: Teams가 이 서버로 직접 POST하므로 `/webhook`이 HTTPS로 인터넷에서 접근 가능해야 합니다. 기존 리버스 프록시(Caddy/Nginx)에 경로를 추가하는 것이 가장 간단합니다. 예) Caddy:
+> **공개 주소**: Teams가 이 서버로 직접 POST하므로 `/webhook`이 HTTPS로 인터넷에서 접근 가능해야 합니다.
+>
+> **장부장은 teamMoneyManager와 같은 서버에 둘 필요가 없습니다.** 인바운드(Teams → 장부장)만 본인이 통제하는 HTTPS 주소면 되고, 아웃바운드(장부장 → teamMoneyManager)는 `TMM_BASE_URL`로 공개 주소를 호출할 뿐입니다. 따라서 **본인 소유 도메인**(예: `bot.joannes.kr`)에 장부장만 올리고, `.env`에서 `TMM_BASE_URL=https://<teamMoneyManager 공개주소>` 로 가리키면 됩니다.
+>
+> 자동 HTTPS가 필요하면 [`deploy/`](deploy/)의 Caddy 예시를 사용하세요:
+> ```bash
+> cp deploy/Caddyfile.example deploy/Caddyfile   # 도메인 수정
+> docker compose -f docker-compose.yml -f deploy/docker-compose.caddy.yml up -d --build
 > ```
-> bi.example.com {
->   handle /webhook* {
->     reverse_proxy teambi-agent:49877
->   }
->   reverse_proxy tmm:49876
-> }
-> ```
+> Caddy가 Let's Encrypt 인증서를 자동 발급합니다. Teams 웹훅 콜백 URL은 `https://bot.joannes.kr/webhook`.
 
 ## 제약 사항 (Teams Outgoing Webhook)
 

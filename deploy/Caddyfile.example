@@ -1,0 +1,18 @@
+# Caddyfile.example — 장부장을 본인 도메인(bot.joannes.kr 등)으로 공개하는 예시.
+#
+# Caddy는 Let's Encrypt 인증서를 자동 발급·갱신하므로 HTTPS 설정이 가장 간단하다.
+# teamMoneyManager 서버(bi.zerolive.co.kr)에는 아무것도 붙이지 않는다 —
+# 장부장은 그 서버의 REST API를 아웃바운드로 호출할 뿐이다(.env의 TMM_BASE_URL).
+#
+# 사용:
+#   1) DNS: bot.joannes.kr → 이 서버의 공인 IP (A/AAAA 레코드)
+#   2) 이 파일을 /etc/caddy/Caddyfile 로 복사하고 도메인/주소를 실제 값으로 수정
+#   3) caddy reload  (또는 docker compose로 caddy 실행)
+#   4) Teams 발신 웹후크 콜백 URL: https://bot.joannes.kr/webhook
+
+bot.joannes.kr {
+	# 장부장 컨테이너로 전달.
+	#  - 같은 docker compose 네트워크면: teambi-agent:49877
+	#  - 같은 호스트에서 포트 노출로 돌리면: localhost:49877
+	reverse_proxy localhost:49877
+}
