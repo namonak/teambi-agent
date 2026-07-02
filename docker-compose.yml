@@ -1,0 +1,12 @@
+services:
+  teambi-agent:
+    build: .
+    container_name: teambi-agent
+    restart: unless-stopped
+    ports:
+      - '49877:49877'
+    # .env의 값을 컨테이너 환경변수로 주입 (비밀값은 이미지에 넣지 않는다)
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Seoul
