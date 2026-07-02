@@ -84,12 +84,28 @@ npm run dev
 >
 > **장부장은 teamMoneyManager와 같은 서버에 둘 필요가 없습니다.** 인바운드(Teams → 장부장)만 본인이 통제하는 HTTPS 주소면 되고, 아웃바운드(장부장 → teamMoneyManager)는 `TMM_BASE_URL`로 공개 주소를 호출할 뿐입니다. 따라서 **본인 소유 도메인**(예: `bot.joannes.kr`)에 장부장만 올리고, `.env`에서 `TMM_BASE_URL=https://<teamMoneyManager 공개주소>` 로 가리키면 됩니다.
 >
-> 자동 HTTPS가 필요하면 [`deploy/`](deploy/)의 Caddy 예시를 사용하세요:
-> ```bash
-> cp deploy/Caddyfile.example deploy/Caddyfile   # 도메인 수정
-> docker compose -f docker-compose.yml -f deploy/docker-compose.caddy.yml up -d --build
-> ```
-> Caddy가 Let's Encrypt 인증서를 자동 발급합니다. Teams 웹훅 콜백 URL은 `https://bot.joannes.kr/webhook`.
+공개 HTTPS 주소를 붙이는 방법은 환경에 따라 둘 중 하나:
+
+**A) 이미 리버스 프록시가 있는 경우 (Synology NAS, Nginx 등)** — 권장. 새 웹서버를 띄우지 말고 기존 프록시에 경로만 추가한다.
+
+- 루트 `docker-compose.yml`로 장부장만 기동(호스트 49877 포트 노출):
+  ```bash
+  docker compose up -d --build
+  ```
+- 리버스 프록시에서 `bot.joannes.kr` → `localhost:49877` 로 전달.
+  - **Synology DSM**: 제어판 → 로그인 포털 → 고급 → 리버스 프록시 → 생성
+    - 소스: HTTPS / `bot.joannes.kr` / 443
+    - 대상: HTTP / `localhost` / 49877
+    - (`bot.joannes.kr` 인증서가 이미 있으면 그대로 물린다. `Authorization` 헤더는 그대로 전달되어 HMAC 검증 정상 동작.)
+
+**B) 프록시가 없는 빈 서버** — [`deploy/`](deploy/)의 Caddy 예시로 자동 HTTPS까지 한 번에:
+```bash
+cp deploy/Caddyfile.example deploy/Caddyfile   # 도메인 수정
+docker compose -f docker-compose.yml -f deploy/docker-compose.caddy.yml up -d --build
+```
+Caddy가 Let's Encrypt 인증서를 자동 발급한다. (80/443 포트가 비어 있어야 함.)
+
+어느 쪽이든 Teams 웹훅 콜백 URL은 `https://bot.joannes.kr/webhook`.
 
 ## 제약 사항 (Teams Outgoing Webhook)
 
