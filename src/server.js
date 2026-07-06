@@ -2,6 +2,7 @@
 // Teams Outgoing Webhook 수신 서버. 데이터 조작은 전부 teamMoneyManager REST API 경유.
 import express from 'express';
 import { createWebhookHandler } from './webhook.js';
+import { getProvider } from './llm.js';
 
 const PORT = Number(process.env.PORT || 49877);
 
@@ -23,5 +24,7 @@ app.post('/webhook', createWebhookHandler());
 app.listen(PORT, () => {
   console.log(`[teambi-agent] 장부장 대기 중 — http://localhost:${PORT}`);
   if (!process.env.TEAMS_WEBHOOK_SECRET) console.warn('[teambi-agent] ⚠️ TEAMS_WEBHOOK_SECRET 미설정 — 모든 웹훅 요청이 401 처리됩니다');
-  if (!process.env.ANTHROPIC_API_KEY) console.warn('[teambi-agent] ℹ️ ANTHROPIC_API_KEY 미설정 — 자연어 처리는 비활성(정형 SMS만 동작)');
+  const provider = getProvider();
+  if (provider) console.log(`[teambi-agent] 🧠 자연어 처리: ${provider.name} (LLM_PROVIDER)`);
+  else console.warn('[teambi-agent] ℹ️ LLM API 키 미설정 — 자연어 처리는 비활성(정형 SMS만 동작)');
 });

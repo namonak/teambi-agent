@@ -1,9 +1,10 @@
-// nl-agent.js — 자연어 명령 처리 (Claude tool-use 루프).
+// nl-agent.js — 자연어 명령 처리 (LLM tool-use 루프, 프로바이더 중립).
+// .env의 LLM_PROVIDER(claude|gemini)에 따라 llm.js가 고른 프로바이더로 동작한다.
 // Teams Outgoing Webhook은 5초 내 1회 응답만 가능하므로:
 //   - 수신 시점 기준 4.2초 데드라인, 최대 3라운드
-//   - 재시도 없음(llm.js: maxRetries 0), 남은 시간 < 700ms면 중단
+//   - 재시도 없음(각 프로바이더 maxRetries 0), 남은 시간 < 700ms면 중단
 //   - 타임아웃돼도 sideEffects로 "지금까지 처리된 것"을 정직하게 회신
-import { getAnthropic, hasApiKey, MODEL } from './llm.js';
+import { getProvider, setupMessage } from './llm.js';
 import { createToolkit } from './tools.js';
 import { todayStr, fmtWon } from './util.js';
 
@@ -40,11 +41,9 @@ function sideEffectsSummary(sideEffects) {
 }
 
 export async function runNlAgent(text, deadline) {
-  if (!hasApiKey()) {
-    return '🤖 자연어 명령은 서버에 ANTHROPIC_API_KEY 설정 후 사용할 수 있어요.\n카드 승인 문자를 그대로 붙여넣으면 바로 등록됩니다.';
-  }
+  const provider = getProvider();
+  if (!provider) return setupMessage();
 
-  const client = getAnthropic();
   let toolkit;
   try {
     toolkit = await createToolkit();
@@ -53,7 +52,8 @@ export async function runNlAgent(text, deadline) {
   }
 
   const system = buildSystem(toolkit);
-  const messages = [{ role: 'user', content: text }];
+  const tools = provider.toTools(toolkit.tools);
+  const messages = provider.initMessages(system, text);
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const remaining = deadline - Date.now();
@@ -61,34 +61,24 @@ export async function runNlAgent(text, deadline) {
 
     let resp;
     try {
-      resp = await client.messages.create(
-        { model: MODEL, max_tokens: 1024, system, tools: toolkit.tools, messages },
-        { timeout: remaining },
-      );
+      resp = await provider.call({ system, messages, tools, timeout: remaining });
     } catch (e) {
       // API 오류/타임아웃 — 원시 에러를 채널에 노출하지 않는다
-      console.warn('[nl-agent] Claude API 오류:', e?.status ?? '', e?.name ?? e?.message);
+      console.warn(`[nl-agent] ${provider.name} API 오류:`, e?.status ?? '', e?.name ?? e?.message);
       return `😵 AI 처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.${sideEffectsSummary(toolkit.sideEffects)}`;
     }
 
-    if (resp.stop_reason !== 'tool_use') {
-      const answer = resp.content
-        .filter((b) => b.type === 'text')
-        .map((b) => b.text)
-        .join('\n')
-        .trim();
-      return answer || `✅ 처리했어요.${sideEffectsSummary(toolkit.sideEffects)}`;
+    if (!resp.isToolUse) {
+      return resp.text || `✅ 처리했어요.${sideEffectsSummary(toolkit.sideEffects)}`;
     }
 
-    // 모든 tool_use를 실행하고, tool_result는 하나의 user 메시지로 반환 (병렬 도구 규칙)
-    messages.push({ role: 'assistant', content: resp.content });
+    provider.appendAssistant(messages, resp.assistant);
     const results = [];
-    for (const block of resp.content) {
-      if (block.type !== 'tool_use') continue;
-      const { content, is_error } = await toolkit.run(block.name, block.input);
-      results.push({ type: 'tool_result', tool_use_id: block.id, content, is_error });
+    for (const tc of resp.toolCalls) {
+      const { content, is_error } = await toolkit.run(tc.name, tc.input);
+      results.push({ id: tc.id, content, is_error });
     }
-    messages.push({ role: 'user', content: results });
+    provider.appendToolResults(messages, results);
   }
 
   return `⏱️ 응답 시간이 초과됐어요.${sideEffectsSummary(toolkit.sideEffects) || ' 처리된 내역은 없습니다.'}\n웹에서 확인하거나 다시 시도해 주세요.`;
