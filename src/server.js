@@ -3,6 +3,7 @@
 import express from 'express';
 import { createWebhookHandler } from './webhook.js';
 import { getProvider } from './llm.js';
+import { notifyEnabled } from './teams-notify.js';
 
 const PORT = Number(process.env.PORT || 49877);
 
@@ -27,4 +28,6 @@ app.listen(PORT, () => {
   const provider = getProvider();
   if (provider) console.log(`[teambi-agent] 🧠 자연어 처리: ${provider.name} (LLM_PROVIDER)`);
   else console.warn('[teambi-agent] ℹ️ LLM API 키 미설정 — 자연어 처리는 비활성(정형 SMS만 동작)');
+  if (notifyEnabled()) console.log('[teambi-agent] 📮 자연어 비동기 모드: 즉시 접수 → Workflows 웹후크 사후 게시');
+  else console.log('[teambi-agent] ℹ️ TEAMS_INCOMING_WEBHOOK_URL 미설정 — 자연어는 5초 동기 모드');
 });

@@ -6,10 +6,13 @@ import { extractUserText } from './text.js';
 import { looksLikeCardSms, parseCardSms } from './sms-parser.js';
 import { classifyCategory } from './classify.js';
 import { runNlAgent } from './nl-agent.js';
+import { notifyEnabled, postToChannel } from './teams-notify.js';
 import * as tmm from './tmm-client.js';
 import { currentPeriod, parseCardMap, fmtWon, fmtDateShort, cardLabel } from './util.js';
 
-const DEADLINE_MS = 4200; // Teams 5초 제한 대비 응답 예산
+const DEADLINE_MS = 4200; // Teams 5초 제한 대비 응답 예산 (동기 모드)
+const ASYNC_DEADLINE_MS = 25_000; // 비동기 모드(사후 게시) 처리 예산
+const ASYNC_MAX_ROUNDS = 6;
 const DEDUPE_MAX = 300;
 const DEDUPE_TTL_MS = 10 * 60 * 1000;
 
@@ -118,6 +121,28 @@ async function handleSmsCancel(parsed, cardMap) {
   return `⚠️ 승인취소 대상 후보가 ${candidates.length}건이라 자동 삭제하지 않았어요:\n${list}\n"#id 삭제해줘"라고 말하거나 웹에서 처리해 주세요.`;
 }
 
+// --- 자연어 비동기 처리 (즉시 접수 응답 → 완료 후 Workflows 웹후크로 게시) ----
+async function processNlAsync(text, requester) {
+  let result;
+  try {
+    result = await runNlAgent(text, Date.now() + ASYNC_DEADLINE_MS, {
+      maxRounds: ASYNC_MAX_ROUNDS,
+      retry429: true,
+    });
+  } catch (e) {
+    console.error('[webhook] 비동기 처리 오류:', e);
+    result = '😵 처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
+  }
+  const quoted = text.replace(/\s+/g, ' ').slice(0, 40);
+  const head = `📣 ${requester ? `${requester}님 ` : ''}요청 결과 — 「${quoted}${text.length > 40 ? '…' : ''}」`;
+  try {
+    await postToChannel(`${head}\n${result}`);
+  } catch (e) {
+    // 게시 실패해도 기입 자체는 완료됐을 수 있음 — 로그만 남긴다
+    console.error('[webhook] 채널 게시 실패:', e.message);
+  }
+}
+
 // --- 메인 핸들러 -----------------------------------------------------------
 export function createWebhookHandler() {
   const cardMap = parseCardMap(process.env.TEAMS_CARD_MAP);
@@ -156,6 +181,14 @@ export function createWebhookHandler() {
         } else {
           reply = await handleSmsApproval(parsed, cardMap);
         }
+      } else if (notifyEnabled()) {
+        // 비동기 모드: 5초 제한을 피해 즉시 접수 응답, 결과는 채널에 사후 게시.
+        // 처리 지속을 위해 응답을 먼저 보내고 백그라운드로 이어간다.
+        reply = '⏳ 접수했어요! 처리가 끝나면 결과를 채널에 올릴게요.';
+        dedupeSet(id, { state: 'done', reply });
+        res.json(msg(reply));
+        processNlAsync(text, activity.from?.name);
+        return;
       } else {
         reply = await runNlAgent(text, deadline);
       }

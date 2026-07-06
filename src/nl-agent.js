@@ -11,6 +11,8 @@ import { todayStr, fmtWon } from './util.js';
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const MAX_ROUNDS = 3;
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 function buildSystem(toolkit) {
   const now = new Date();
   const catLines = toolkit.categories
@@ -31,6 +33,7 @@ ${catLines || '- (없음)'}
 - "어제", "그저께" 같은 상대 날짜는 오늘 기준으로 해석한다.
 - 수정/삭제는 반드시 list_recent_transactions로 대상을 특정한 뒤 실행한다. 특정이 안 되면 실행하지 말고 후보를 보여주며 되묻는다.
 - 카테고리 이름의 지출(회식, 커피 등)은 kind=common, 특정 팀원 개인 지출은 kind=personal.
+- 여러 건을 기입해야 하면 create_transaction을 한 응답에서 여러 개 병렬로 호출한다(한 건씩 나눠 부르지 말 것).
 - 사용자가 카드를 말하지 않으면 card는 생략한다.
 - 최종 답변은 채널에 그대로 표시된다. 2~4줄의 간결한 한국어로, 처리 결과(금액·카테고리·날짜)를 요약한다. 이모지 하나 정도는 좋다.`;
 }
@@ -40,9 +43,12 @@ function sideEffectsSummary(sideEffects) {
   return `\n지금까지 처리된 것:\n${sideEffects.map((s) => `- ${s.action}: ${s.summary}`).join('\n')}`;
 }
 
-export async function runNlAgent(text, deadline) {
+// opts.maxRounds — 라운드 수 (기본 3; 비동기 모드에선 여유 있게)
+// opts.retry429 — true면 429(무료 티어 한도) 시 5초 대기 후 1회 재시도 (비동기 모드 전용)
+export async function runNlAgent(text, deadline, opts = {}) {
   const provider = getProvider();
   if (!provider) return setupMessage();
+  const maxRounds = opts.maxRounds ?? MAX_ROUNDS;
 
   let toolkit;
   try {
@@ -54,8 +60,9 @@ export async function runNlAgent(text, deadline) {
   const system = buildSystem(toolkit);
   const tools = provider.toTools(toolkit.tools);
   const messages = provider.initMessages(system, text);
+  let retried429 = false;
 
-  for (let round = 0; round < MAX_ROUNDS; round++) {
+  for (let round = 0; round < maxRounds; round++) {
     const remaining = deadline - Date.now();
     if (remaining < 700) break;
 
@@ -63,6 +70,14 @@ export async function runNlAgent(text, deadline) {
     try {
       resp = await provider.call({ system, messages, tools, timeout: remaining });
     } catch (e) {
+      // 무료 티어 한도(429): 비동기 모드면 잠시 쉬었다 1회 재시도
+      if (opts.retry429 && !retried429 && e?.status === 429 && deadline - Date.now() > 8000) {
+        retried429 = true;
+        console.warn(`[nl-agent] ${provider.name} 429 — 5초 대기 후 재시도`);
+        await sleep(5000);
+        round--;
+        continue;
+      }
       // API 오류/타임아웃 — 원시 에러를 채널에 노출하지 않는다
       console.warn(`[nl-agent] ${provider.name} API 오류:`, e?.status ?? '', e?.name ?? e?.message);
       return `😵 AI 처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.${sideEffectsSummary(toolkit.sideEffects)}`;
@@ -81,5 +96,8 @@ export async function runNlAgent(text, deadline) {
     provider.appendToolResults(messages, results);
   }
 
-  return `⏱️ 응답 시간이 초과됐어요.${sideEffectsSummary(toolkit.sideEffects) || ' 처리된 내역은 없습니다.'}\n웹에서 확인하거나 다시 시도해 주세요.`;
+  if (toolkit.sideEffects.length > 0) {
+    return `⏱️ 응답 시간이 초과됐어요.${sideEffectsSummary(toolkit.sideEffects)}\n⚠️ 위 내역은 이미 기입됐어요 — 같은 명령을 다시 보내면 중복 기입됩니다. 웹에서 확인해 주세요.`;
+  }
+  return '⏱️ 응답 시간이 초과됐어요. 처리된 내역은 없습니다.\n다시 시도해 주세요.';
 }

@@ -107,10 +107,23 @@ Caddy가 Let's Encrypt 인증서를 자동 발급한다. (80/443 포트가 비�
 
 어느 쪽이든 Teams 웹훅 콜백 URL은 `https://bot.joannes.kr/webhook`.
 
+### 4. (선택·권장) 자연어 비동기 모드 — Workflows 웹후크
+
+Outgoing Webhook은 **5초 내 1회 응답**만 허용해서, 자연어 다건 등록이나 느린 AI 응답은 시간이 부족할 수 있습니다. Teams **Workflows 웹후크**를 연결하면 자연어 요청에 "⏳ 접수했어요"로 즉답하고, 실제 결과(최대 25초 처리, 무료 티어 429 자동 재시도 포함)를 채널에 따로 게시합니다.
+
+1. Teams에서 결과를 올릴 **채널 이름 옆 ⋯ → 워크플로**(Workflows) 클릭
+2. 템플릿 검색: **"웹후크 요청이 수신되면 채널에 게시"** (Post to a channel when a webhook request is received) → 선택
+3. 팀/채널 확인 → **흐름 추가** → 생성된 **HTTP POST URL 복사**
+4. `.env`의 `TEAMS_INCOMING_WEBHOOK_URL=`에 붙여넣고 컨테이너 재생성(`docker compose down && docker compose up -d`)
+
+> - 기존 O365 커넥터 방식 "수신 웹후크"는 **2026년 5월 폐기**됐습니다 — 반드시 Workflows 앱으로 만드세요.
+> - 사후 게시 메시지는 Teams 정책상 "Workflows(Flow bot)" 이름으로 표시됩니다(장부장 이름/아이콘 커스텀 불가).
+> - 미설정 시 기존처럼 5초 동기 모드로 동작합니다. 카드 SMS 기입은 어차피 빨라서 항상 즉답합니다.
+
 ## 제약 사항 (Teams Outgoing Webhook)
 
 - 봇을 **@멘션한 메시지에만** 반응합니다 (채널 전용, 개인 채팅 불가)
-- **5초 내 1회 응답**만 가능하고, 봇이 먼저 말을 걸 수 없습니다
+- **5초 내 1회 응답** 제한 — 자연어는 위 4번(비동기 모드)으로 우회 가능
 - 더 나은 UX(멘션 불필요, 버튼 카드, 능동 알림)가 필요하면 Azure Bot Service 기반 정식 봇으로 업그레이드하는 경로가 있습니다
 
 ## 개발
@@ -128,8 +141,9 @@ src/
 ├── text.js        # 멘션/HTML 정제
 ├── sms-parser.js  # 카드 SMS 정규식 파서
 ├── classify.js    # 카테고리 분류 (키워드 → LLM 폴백 → 기본값)
-├── nl-agent.js    # LLM tool-use 루프 (4.2s 데드라인, 프로바이더 중립)
+├── nl-agent.js    # LLM tool-use 루프 (동기 4.2s / 비동기 25s, 프로바이더 중립)
 ├── llm.js         # 프로바이더 선택기 (LLM_PROVIDER=claude|gemini)
+├── teams-notify.js# Workflows 웹후크 사후 게시 (Adaptive Card)
 ├── providers/
 │   ├── claude.js  # Anthropic Messages API
 │   └── gemini.js  # Gemini (OpenAI 호환 엔드포인트)
