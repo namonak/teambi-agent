@@ -78,8 +78,15 @@ export async function runNlAgent(text, deadline, opts = {}) {
         round--;
         continue;
       }
-      // API 오류/타임아웃 — 원시 에러를 채널에 노출하지 않는다
-      console.warn(`[nl-agent] ${provider.name} API 오류:`, e?.status ?? '', e?.name ?? e?.message);
+      // API 오류/타임아웃 — 채널엔 노출하지 않고 로그에 상세(어느 한도 초과인지 등)를 남긴다
+      console.warn(
+        `[nl-agent] ${provider.name} API 오류:`,
+        e?.status ?? '',
+        e?.message ?? e?.name ?? String(e),
+      );
+      if (e?.status === 429) {
+        return `⏳ AI 사용량 한도에 걸렸어요(무료 티어). 잠시 후(분당 한도) 또는 내일(일일 한도) 다시 시도해 주세요.${sideEffectsSummary(toolkit.sideEffects)}`;
+      }
       return `😵 AI 처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.${sideEffectsSummary(toolkit.sideEffects)}`;
     }
 
