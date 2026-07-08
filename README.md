@@ -130,7 +130,7 @@ Outgoing Webhook은 **5초 내 1회 응답**만 허용해서, 자연어 다건 �
 ## 개발
 
 ```bash
-npm test          # 단위 테스트 (파서/분류/HMAC/텍스트 정제)
+npm test          # 단위 테스트 (파서/분류/HMAC/텍스트 정제/LLM 프로바이더/Workflows 알림)
 npm run dev       # watch 모드
 ```
 
