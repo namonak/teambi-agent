@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "장부장 — Teams 채널의 카드 승인 문자·자연어 메시지로 팀비 지출을 자동 기입하는 AI Agent",
   "type": "module",
+  "license": "MIT",
   "engines": {
     "node": ">=20"
   },
