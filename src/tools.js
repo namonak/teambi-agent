@@ -171,6 +171,7 @@ export async function createToolkit() {
           return { content: `알 수 없는 도구: ${name}`, is_error: true };
       }
     } catch (e) {
+      if (e.status) return { content: `외부 서비스 처리 중 오류가 발생했어요 (HTTP ${e.status})`, is_error: true };
       return { content: `오류: ${e.message}`, is_error: true };
     }
   }
