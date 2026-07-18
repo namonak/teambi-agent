@@ -64,7 +64,7 @@ async function handleSmsApproval(parsed, cardMap) {
     const d = await tmm.getDashboard(period);
     const c = d.categories.find((x) => x.id === category.id);
     if (c) balanceLine = `\n${c.name} 잔액: ${fmtWon(c.remaining)} / ${fmtWon(c.allocated)}`;
-  } catch { /* 잔액 표시는 부가 정보 */ }
+  } catch (e) { console.warn('[webhook] 잔액 조회 실패:', e.message); }
 
   const notes = [];
   if (card === null && parsed.cardDigits) {
@@ -106,7 +106,7 @@ async function handleSmsCancel(parsed, cardMap) {
       const d = await tmm.getDashboard(period);
       const c = d.categories.find((x) => x.id === target.period_category_id);
       if (c) balanceLine = `\n${c.name} 잔액: ${fmtWon(c.remaining)} / ${fmtWon(c.allocated)}`;
-    } catch { /* 부가 정보 */ }
+    } catch (e) { console.warn('[webhook] 잔액 조회 실패:', e.message); }
     return (
       `↩️ 승인취소 처리: #${target.id} 삭제\n` +
       `${fmtDateShort(target.date)} · ${fmtWon(target.amount)} · ${target.category_name ?? target.member_name ?? ''}${target.memo ? ` · ${target.memo}` : ''}` +
