@@ -3,6 +3,13 @@
 const BASE = () => (process.env.TMM_BASE_URL || '').replace(/\/$/, '');
 
 let sessionCookie = null;
+let loginPromise = null;
+
+// 동시 요청이 세션 없는 상태로 진입해도 login()을 한 번만 실행하도록 합친다.
+function ensureLogin() {
+  if (!loginPromise) loginPromise = login().finally(() => { loginPromise = null; });
+  return loginPromise;
+}
 
 async function login() {
   if (!BASE() || !process.env.TMM_PASSWORD) {
@@ -21,7 +28,7 @@ async function login() {
 }
 
 async function api(method, path, body, retry = true) {
-  if (!sessionCookie) await login();
+  if (!sessionCookie) await ensureLogin();
   const res = await fetch(`${BASE()}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
