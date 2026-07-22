@@ -187,7 +187,7 @@ export function createWebhookHandler() {
         reply = '⏳ 접수했어요! 처리가 끝나면 결과를 채널에 올릴게요.';
         dedupeSet(id, { state: 'done', reply });
         res.json(msg(reply));
-        processNlAsync(text, activity.from?.name);
+        processNlAsync(text, activity.from?.name).catch((e) => console.error('[webhook] 비동기 처리 미처리 예외:', e));
         return;
       } else {
         reply = await runNlAgent(text, deadline);

@@ -22,7 +22,12 @@ app.get('/health', (_req, res) => res.json({ ok: true, name: 'teambi-agent' }));
 
 app.post('/webhook', createWebhookHandler());
 
-app.listen(PORT, () => {
+// 프로세스 레벨 안전망 — 예기치 못한 예외로 컨테이너가 조용히 죽지 않도록 로그를 남긴다.
+// (Docker restart:unless-stopped가 최종 복구망이므로 여기선 로깅을 우선한다)
+process.on('unhandledRejection', (e) => console.error('[teambi-agent] unhandledRejection:', e));
+process.on('uncaughtException', (e) => console.error('[teambi-agent] uncaughtException:', e));
+
+const server = app.listen(PORT, () => {
   console.log(`[teambi-agent] 장부장 대기 중 — http://localhost:${PORT}`);
   if (!process.env.TEAMS_WEBHOOK_SECRET) console.warn('[teambi-agent] ⚠️ TEAMS_WEBHOOK_SECRET 미설정 — 모든 웹훅 요청이 401 처리됩니다');
   const provider = getProvider();
@@ -30,4 +35,9 @@ app.listen(PORT, () => {
   else console.warn('[teambi-agent] ℹ️ LLM API 키 미설정 — 자연어 처리는 비활성(정형 SMS만 동작)');
   if (notifyEnabled()) console.log('[teambi-agent] 📮 자연어 비동기 모드: 즉시 접수 → Workflows 웹후크 사후 게시');
   else console.log('[teambi-agent] ℹ️ TEAMS_INCOMING_WEBHOOK_URL 미설정 — 자연어는 5초 동기 모드');
+});
+
+server.on('error', (e) => {
+  console.error('[teambi-agent] 서버 시작 실패:', e.message);
+  process.exit(1);
 });
