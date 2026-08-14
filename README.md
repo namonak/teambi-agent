@@ -40,7 +40,7 @@ Teams 채널 ── @장부장 멘션 ──▶ teambi-agent ── REST API ─
 |---|---|---|
 | 카드 승인 SMS | 정규식 파싱 → 키워드 분류(커피/간식/회식/야근) → 즉시 기입 | ❌ (분류 애매할 때만 폴백) |
 | 승인취소 SMS | 금액+카드+가맹점 매칭 → 1건이면 자동 삭제 | ❌ |
-| 자연어 | Gemini tool-use 루프 — 조회/기입/수정/삭제 도구 6종 | ✅ |
+| 자연어 | Gemini tool-use 루프 — 조회/기입/수정/삭제 도구 5종 | ✅ |
 
 - **teamMoneyManager는 수정하지 않습니다.** 모든 조작은 기존 REST API(`/api/transactions` 등)로 수행합니다.
 - Teams Outgoing Webhook의 **HMAC-SHA256 서명을 검증**하고, 재시도로 인한 **중복 기입을 방지**(activity.id 기준)합니다.
@@ -183,7 +183,7 @@ src/
 ├── errors.js      # 외부 호출 실패 → 로그 문구 / 채널 회신 문구 매핑
 ├── version.js     # 빌드 식별 정보 (기동 로그 · /health)
 ├── teams-notify.js# Workflows 웹후크 사후 게시 (Adaptive Card)
-├── tools.js       # LLM 도구 6종
+├── tools.js       # LLM 도구 5종
 ├── tmm-client.js  # teamMoneyManager REST 클라이언트
 └── util.js        # 날짜/금액/설정 유틸
 ```

@@ -1,4 +1,4 @@
-// tools.js — 자연어 처리용 LLM 도구 6종. 모든 실행은 tmm-client(REST) 위임.
+// tools.js — 자연어 처리용 LLM 도구 5종. 모든 실행은 tmm-client(REST) 위임.
 // 도구 실행 결과는 tool_result 문자열로 반환하고, 기입/수정/삭제는 sideEffects에 기록해
 // 타임아웃 시에도 "지금까지 처리된 것"을 정직하게 회신할 수 있게 한다.
 import * as tmm from './tmm-client.js';
@@ -11,11 +11,10 @@ const TOOL_DEFS = [
     description: '당월 공용 카테고리 목록과 예산/사용액/잔액을 조회한다.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
-  {
-    name: 'list_members',
-    description: '활성 팀원 목록(id, 이름)을 조회한다. 개인 지출 기입 시 대상 특정에 사용.',
-    input_schema: { type: 'object', properties: {}, additionalProperties: false },
-  },
+  // list_members는 두지 않는다 — 활성 팀원 목록은 시스템 프롬프트에 이미 실려 있고
+  // 이 도구는 네트워크 조회 없이 같은 배열을 되돌려줄 뿐이다. 정보량은 0인데 LLM
+  // 라운드를 하나(약 1,150ms) 소모해 Teams 4.2초 예산을 무너뜨렸다.
+  // 이름 → id 해석은 아래 resolveByName이 toolkit의 members로 처리한다.
   {
     name: 'list_recent_transactions',
     description: '당월 지출 내역을 최신순으로 조회한다. 수정/삭제 대상을 특정할 때 반드시 먼저 호출한다.',
@@ -137,8 +136,6 @@ export async function createToolkit() {
           const d = await tmm.getDashboard(period);
           return { content: JSON.stringify(d.categories ?? [], null, 0), is_error: false };
         }
-        case 'list_members':
-          return { content: JSON.stringify(members.map((m) => ({ id: m.id, name: m.name }))), is_error: false };
         case 'list_recent_transactions': {
           const params = { period };
           if (input.kind) params.kind = input.kind;

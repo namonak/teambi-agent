@@ -27,11 +27,12 @@ ${catLines || '- (없음)'}
 활성 팀원: ${memberLine || '(없음)'}
 
 규칙:
+- 위에 적은 카테고리 잔액과 팀원 목록은 이번 요청 시점의 최신 값이다. 그대로 사용하고 같은 내용을 다시 조회하지 마라.
+- 도구가 여러 개 필요하면 한 응답에서 모두 병렬로 호출한다. 한 번에 하나씩 나눠 부르면 시간 안에 끝나지 않는다.
 - 이 앱은 당월 지출만 기입/수정 가능하다. 지난달 요청이면 기입하지 말고 이유를 설명한다.
 - "어제", "그저께" 같은 상대 날짜는 오늘 기준으로 해석한다.
 - 수정/삭제는 반드시 list_recent_transactions로 대상을 특정한 뒤 실행한다. 특정이 안 되면 실행하지 말고 후보를 보여주며 되묻는다.
 - 카테고리 이름의 지출(회식, 커피 등)은 kind=common, 특정 팀원 개인 지출은 kind=personal.
-- 여러 건을 기입해야 하면 create_transaction을 한 응답에서 여러 개 병렬로 호출한다(한 건씩 나눠 부르지 말 것).
 - 사용자가 카드를 말하지 않으면 card는 생략한다.
 - 최종 답변은 채널에 그대로 표시된다. 2~4줄의 간결한 한국어로, 처리 결과(금액·카테고리·날짜)를 요약한다. 이모지 하나 정도는 좋다.`;
 }
@@ -43,9 +44,14 @@ function sideEffectsSummary(sideEffects) {
 
 // 타임아웃 시 어느 구간이 예산을 먹었는지 로그 한 줄로 남긴다.
 // 이게 없어서 컨테이너에 들어가 구간별로 재야 했다(범인은 createToolkit 1,858ms였다).
+// 라운드 수만으로는 왜 더 필요했는지 알 수 없어 호출한 도구 이름도 싣는다.
+// 인자 값은 담지 않는다 — 금액·가맹점이 로그에 남지 않도록.
 export function budgetSummary(spent, remaining) {
+  const trace = spent.calls?.length
+    ? `${spent.rounds}라운드: ${spent.calls.map((names) => names.join('+')).join(' → ')}`
+    : `${spent.rounds}라운드`;
   return (
-    `준비 ${spent.toolkit}ms · LLM ${spent.llm}ms(${spent.rounds}라운드) · ` +
+    `준비 ${spent.toolkit}ms · LLM ${spent.llm}ms(${trace}) · ` +
     `도구 ${spent.tools}ms · 남은 시간 ${remaining}ms`
   );
 }
@@ -54,7 +60,7 @@ export function budgetSummary(spent, remaining) {
 export async function runNlAgent(text, deadline, opts = {}) {
   if (!gemini.configured()) return gemini.setupMessage();
   const maxRounds = opts.maxRounds ?? MAX_ROUNDS;
-  const spent = { toolkit: 0, llm: 0, tools: 0, rounds: 0 };
+  const spent = { toolkit: 0, llm: 0, tools: 0, rounds: 0, calls: [] };
   const since = (t) => Date.now() - t;
 
   let toolkit;
@@ -93,6 +99,8 @@ export async function runNlAgent(text, deadline, opts = {}) {
     if (!resp.isToolUse) {
       return resp.text || `✅ 처리했어요.${sideEffectsSummary(toolkit.sideEffects)}`;
     }
+
+    spent.calls.push(resp.toolCalls.map((tc) => tc.name));
 
     gemini.appendAssistant(messages, resp.assistant);
     const results = [];
