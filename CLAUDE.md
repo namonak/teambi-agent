@@ -22,7 +22,7 @@
 
 | 항목 | 값 |
 |------|-----|
-| 기술 스택 | Node.js 20+ (ESM), Express 4, Gemini(gemini-3.6-flash) — openai SDK로 OpenAI 호환 엔드포인트 호출 |
+| 기술 스택 | Node.js 20+ (ESM), Express 4, Gemini(gemini-3.5-flash-lite) — openai SDK로 OpenAI 호환 엔드포인트 호출 |
 | 실행 방법 | `npm run dev` (개발) / `docker compose up -d` (배포, 포트 49877) |
 | 테스트 | `npm test` (node:test — parser/classify/hmac/text/gemini/errors/version/teams-notify) |
 | 연동 대상 | teamMoneyManager REST API (`TMM_BASE_URL`, 세션 쿠키 로그인) |

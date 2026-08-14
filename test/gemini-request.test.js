@@ -18,7 +18,7 @@ const server = http.createServer((req, res) => {
         id: 'test',
         object: 'chat.completion',
         created: 0,
-        model: 'gemini-3.6-flash',
+        model: 'gemini-3.5-flash-lite',
         choices: [{ index: 0, message: { role: 'assistant', content: '커피' }, finish_reason: 'stop' }],
       }),
     );

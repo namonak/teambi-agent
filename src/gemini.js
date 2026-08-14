@@ -12,9 +12,13 @@ const clean = (v) => (v ?? '').trim();
 
 const RAW_MODEL = process.env.GEMINI_MODEL;
 const RAW_BASE = process.env.GEMINI_BASE_URL;
-// gemini-2.5-flash는 신규 사용자에게 차단됐다("no longer available to new users").
-// 문서와 /models 목록에는 남아 있지만 실제 호출은 404로 거부된다.
-const MODEL = clean(RAW_MODEL) || 'gemini-3.6-flash';
+// 기본 모델 선정 근거 (실측, NAS 컨테이너에서 도구 6종 물린 단발 호출):
+//   gemini-3.6-flash      라운드당 ~1,150ms → 수정·삭제류(3라운드)가 4.2초 예산 초과
+//   gemini-3.5-flash-lite 라운드당 ~732ms  → 3라운드도 예산 안 (준비 760 + 2,196 + 도구 600)
+// 더 강한 해석이 필요하면 GEMINI_MODEL=gemini-3.6-flash + 비동기 모드(25초)를 함께 쓴다.
+// 참고: gemini-2.5-flash는 신규 사용자에게 차단됐다("no longer available to new users")
+// — 문서와 /models 목록에는 남아 있지만 실제 호출은 404로 거부된다.
+const MODEL = clean(RAW_MODEL) || 'gemini-3.5-flash-lite';
 // GEMINI_BASE_URL은 프록시·테스트용 오버라이드 (기본: Google 공식 OpenAI 호환 엔드포인트)
 const BASE_URL = clean(RAW_BASE) || DEFAULT_BASE_URL;
 

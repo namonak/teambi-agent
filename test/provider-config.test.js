@@ -13,13 +13,13 @@ async function geminiConfig(env, tag) {
 
 test('기본 설정: 모델 이름을 그대로 보고한다', async () => {
   const c = await geminiConfig({}, 'default');
-  assert.equal(c.model, 'gemini-3.6-flash');
+  assert.equal(c.model, 'gemini-3.5-flash-lite');
   assert.deepEqual(c.notes, [], '기본 상태에서는 경고가 없어야 한다');
 });
 
 test('모델 이름의 공백·CR을 정리하고 오염 사실을 알린다', async () => {
-  const c = await geminiConfig({ GEMINI_MODEL: 'gemini-3.6-flash\r' }, 'dirtymodel');
-  assert.equal(c.model, 'gemini-3.6-flash', '정리 후 정상 인식되어야 한다');
+  const c = await geminiConfig({ GEMINI_MODEL: 'gemini-3.5-flash-lite\r' }, 'dirtymodel');
+  assert.equal(c.model, 'gemini-3.5-flash-lite', '정리 후 정상 인식되어야 한다');
   assert.ok(
     c.notes.some((n) => n.includes('GEMINI_MODEL')),
     '오염을 조용히 고치면 안 된다',
@@ -33,7 +33,7 @@ test('엔드포인트를 재정의하면 기동 로그로 드러낸다', async (
 
 test('공백만 있는 값은 기본값으로 되돌린다', async () => {
   const c = await geminiConfig({ GEMINI_MODEL: '   ' }, 'blank');
-  assert.equal(c.model, 'gemini-3.6-flash');
+  assert.equal(c.model, 'gemini-3.5-flash-lite');
 });
 
 

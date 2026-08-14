@@ -149,7 +149,7 @@ docker compose up -d --build
 
 | 로그 | 의미 |
 |---|---|
-| `🧠 자연어 처리: gemini · 모델 gemini-3.6-flash` | 정상. 실제 호출할 모델을 확인할 수 있음 |
+| `🧠 자연어 처리: gemini · 모델 gemini-3.5-flash-lite` | 정상. 실제 호출할 모델을 확인할 수 있음 |
 | `⚠️ GEMINI_MODEL 값에 공백/개행이 섞여 있어요` | 모델명 오염 — 방치하면 호출 시 404 |
 | `⚠️ 엔드포인트가 재정의됨: ...` | `GEMINI_BASE_URL`이 설정돼 공식 주소로 안 나감 |
 | `ℹ️ GEMINI_API_KEY 미설정` | 해당 키가 비어 있음 |
@@ -195,7 +195,7 @@ src/
 | 항목 | 값 |
 |---|---|
 | 키 발급 | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — 무료 티어 있음, 카드 등록 불필요 |
-| 기본 모델 | `gemini-3.6-flash` (`GEMINI_MODEL`로 변경) |
+| 기본 모델 | `gemini-3.5-flash-lite` (`GEMINI_MODEL`로 변경) — Teams 5초 예산 안에 3라운드 도구 호출까지 들어오는 유일한 모델 |
 | 비용 | 무료 티어로 0원까지 가능 (예: 15 RPM · 1,000 RPD) |
 | 데이터 | ⚠️ **무료 티어는 입력·출력이 Google 제품 개선(학습)에 사용될 수 있음** — 가맹점명·금액·팀원 이름이 전송되므로 회사 데이터 정책 확인 후 사용 |
 
