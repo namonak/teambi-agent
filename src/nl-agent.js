@@ -6,7 +6,7 @@
 //   - 타임아웃돼도 sideEffects로 "지금까지 처리된 것"을 정직하게 회신
 import { getProvider, setupMessage } from './llm.js';
 import { createToolkit } from './tools.js';
-import { describeError, llmUserMessage } from './errors.js';
+import { describeError, llmUserMessage, isConfigError } from './errors.js';
 import { todayStr, fmtWon } from './util.js';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -67,8 +67,10 @@ export async function runNlAgent(text, deadline, opts = {}) {
     try {
       resp = await provider.call({ system, messages, tools, timeout: remaining });
     } catch (e) {
-      // 원문은 채널에 노출하지 않고 로그에만 남긴다(어느 한도를 넘겼는지 등은 로그로 확인)
-      console.warn(`[nl-agent] ${provider.name} 호출 실패:`, describeError(e));
+      // 원문은 채널에 노출하지 않고 로그에만 남긴다(어느 한도를 넘겼는지 등은 로그로 확인).
+      // 설정 오류(401/403)는 저절로 낫지 않으니 error로 올려 눈에 띄게 한다.
+      const log = isConfigError(e) ? console.error : console.warn;
+      log(`[nl-agent] ${provider.name} 호출 실패:`, describeError(e));
       return `${llmUserMessage(e)}${sideEffectsSummary(toolkit.sideEffects)}`;
     }
 

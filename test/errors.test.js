@@ -1,8 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeError, llmUserMessage, serviceUserMessage } from '../src/errors.js';
+import { describeError, llmUserMessage, serviceUserMessage, isConfigError } from '../src/errors.js';
 
 // OpenAI/Anthropic SDK가 실제로 던지는 형태를 모사
+const unauthorized = Object.assign(new Error('401 status code (no body)'), { status: 401 });
+const forbidden = Object.assign(new Error('403 status code (no body)'), { status: 403 });
 const rateLimit = Object.assign(new Error('429 status code (no body)'), { status: 429 });
 const overloaded = Object.assign(new Error('503 status code (no body)'), { status: 503 });
 const timedOut = Object.assign(new Error('Request timed out.'), { name: 'APIConnectionTimeoutError' });
@@ -18,6 +20,25 @@ test('llmUserMessage: 429는 사용량 한도 안내', () => {
   const m = llmUserMessage(rateLimit);
   assert.match(m, /한도/);
   assert.doesNotMatch(m, /no body/); // 원문 노출 금지
+});
+
+test('llmUserMessage: 401/403은 설정 문제로 안내하고 재시도를 권하지 않는다', () => {
+  // 인증 오류는 기다린다고 낫지 않는다. "잠시 후 다시" 안내는 사용자를 무한 재시도로 몰고,
+  // 운영자는 설정 문제라는 신호를 놓친다.
+  for (const e of [unauthorized, forbidden]) {
+    const m = llmUserMessage(e);
+    assert.match(m, /키|설정/, '무엇을 손봐야 하는지 알려야 한다');
+    assert.doesNotMatch(m, /잠시 후|다시 시도/, '재시도를 권하면 안 된다');
+    assert.doesNotMatch(m, /no body/);
+  }
+});
+
+test('isConfigError: 401/403만 설정 오류로 분류한다 (로그 레벨 격상용)', () => {
+  assert.equal(isConfigError(unauthorized), true);
+  assert.equal(isConfigError(forbidden), true);
+  assert.equal(isConfigError(rateLimit), false);
+  assert.equal(isConfigError(timedOut), false);
+  assert.equal(isConfigError(unknown), false);
 });
 
 test('llmUserMessage: 5xx는 일시적 불안정 안내 (429와 구분)', () => {

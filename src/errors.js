@@ -12,8 +12,15 @@ export function describeError(e) {
 // (OpenAI SDK: APIConnectionTimeoutError 'Request timed out.')
 const isTimeout = (e) => !e?.status && /timed?\s?out|timeout/i.test(`${e?.name ?? ''} ${e?.message ?? ''}`);
 
+// 키가 틀렸거나 권한이 없는 경우 — 기다려도 낫지 않으므로 재시도를 권하지 않고
+// 로그도 error로 올려 운영자가 알아채게 한다.
+export const isConfigError = (e) => e?.status === 401 || e?.status === 403;
+
 // LLM 호출 실패 → 채널 회신 문구
 export function llmUserMessage(e) {
+  if (isConfigError(e)) {
+    return '🔑 AI 서비스 인증에 실패했어요. 서버의 API 키 설정을 확인해 주세요.';
+  }
   if (e?.status === 429) {
     return '⏳ AI 사용량 한도에 걸렸어요. 잠시 후(분당 한도) 또는 내일(일일 한도) 다시 시도해 주세요.';
   }
