@@ -1,6 +1,8 @@
-// providers/gemini.js — Gemini 프로바이더 (OpenAI 호환 엔드포인트 경유).
-// Gemini는 Anthropic 호환이 아니므로 OpenAI SDK로 호출하고, 포맷을 공통 인터페이스에 맞춘다.
+// gemini.js — 자연어 처리·분류 폴백에 쓰는 LLM.
+// Google의 OpenAI 호환 엔드포인트를 openai SDK로 호출한다(네이티브 API가 아님).
 // 무료 티어 주의: 입출력이 Google 제품 개선(학습)에 사용될 수 있음(.env 안내 참조).
+//
+// Teams 5초 예산 때문에 maxRetries는 0이고, 타임아웃은 호출할 때마다 남은 시간을 넘긴다.
 import OpenAI from 'openai';
 
 // .env 값에 공백·CR이 섞이는 사고가 잦다. 정리해서 쓰되 오염 사실은 notes로 알린다
@@ -33,8 +35,8 @@ export const name = 'gemini';
 export const configured = () => Boolean(clean(process.env.GEMINI_API_KEY));
 export const setupHint = 'GEMINI_API_KEY';
 
-// 기동 로그용 — 실제로 어디로 무엇을 호출하는지 드러낸다
-export function config() {
+// 기동 로그·진단용 — 실제로 어디로 무엇을 호출하는지, 설정에 문제가 없는지 드러낸다
+export function status() {
   const notes = [];
   for (const [key, raw] of [
     ['GEMINI_MODEL', RAW_MODEL],
@@ -44,10 +46,15 @@ export function config() {
     if (raw && raw !== raw.trim()) notes.push(`${key} 값에 공백/개행이 섞여 있어요`);
   }
   if (BASE_URL !== DEFAULT_BASE_URL) notes.push(`엔드포인트가 재정의됨: ${BASE_URL}`);
-  return { model: MODEL, notes };
+  return { model: MODEL, configured: configured(), hint: setupHint, notes };
 }
 
-// Anthropic 도구 정의({name, description, input_schema}) → OpenAI 함수 포맷
+// 키 미설정 시 채널에 그대로 나가는 안내 문구
+export function setupMessage() {
+  return `🤖 자연어 명령은 서버에 ${setupHint} 설정 후 사용할 수 있어요.\n카드 승인 문자를 그대로 붙여넣으면 바로 등록됩니다.`;
+}
+
+// tools.js의 도구 정의({name, description, input_schema}) → OpenAI 함수 포맷
 export const toTools = (tools) =>
   tools.map((t) => ({
     type: 'function',

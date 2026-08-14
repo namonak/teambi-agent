@@ -1,10 +1,9 @@
-// nl-agent.js — 자연어 명령 처리 (LLM tool-use 루프, 프로바이더 중립).
-// .env의 LLM_PROVIDER(claude|gemini)에 따라 llm.js가 고른 프로바이더로 동작한다.
+// nl-agent.js — 자연어 명령 처리 (Gemini tool-use 루프).
 // Teams Outgoing Webhook은 5초 내 1회 응답만 가능하므로:
 //   - 수신 시점 기준 4.2초 데드라인, 최대 3라운드
-//   - 재시도 없음(각 프로바이더 maxRetries 0), 남은 시간 < 700ms면 중단
+//   - 재시도 없음(SDK maxRetries 0), 남은 시간 < 700ms면 중단
 //   - 타임아웃돼도 sideEffects로 "지금까지 처리된 것"을 정직하게 회신
-import { getProvider, setupMessage } from './llm.js';
+import * as gemini from './gemini.js';
 import { createToolkit } from './tools.js';
 import { describeError, llmUserMessage, isConfigError } from './errors.js';
 import { todayStr, fmtWon } from './util.js';
@@ -44,8 +43,7 @@ function sideEffectsSummary(sideEffects) {
 
 // opts.maxRounds — 라운드 수 (기본 3; 비동기 모드에선 여유 있게)
 export async function runNlAgent(text, deadline, opts = {}) {
-  const provider = getProvider();
-  if (!provider) return setupMessage();
+  if (!gemini.configured()) return gemini.setupMessage();
   const maxRounds = opts.maxRounds ?? MAX_ROUNDS;
 
   let toolkit;
@@ -56,8 +54,8 @@ export async function runNlAgent(text, deadline, opts = {}) {
   }
 
   const system = buildSystem(toolkit);
-  const tools = provider.toTools(toolkit.tools);
-  const messages = provider.initMessages(system, text);
+  const tools = gemini.toTools(toolkit.tools);
+  const messages = gemini.initMessages(system, text);
 
   for (let round = 0; round < maxRounds; round++) {
     const remaining = deadline - Date.now();
@@ -65,12 +63,12 @@ export async function runNlAgent(text, deadline, opts = {}) {
 
     let resp;
     try {
-      resp = await provider.call({ system, messages, tools, timeout: remaining });
+      resp = await gemini.call({ system, messages, tools, timeout: remaining });
     } catch (e) {
       // 원문은 채널에 노출하지 않고 로그에만 남긴다(어느 한도를 넘겼는지 등은 로그로 확인).
       // 설정 오류(401/403)는 저절로 낫지 않으니 error로 올려 눈에 띄게 한다.
       const log = isConfigError(e) ? console.error : console.warn;
-      log(`[nl-agent] ${provider.name} 호출 실패:`, describeError(e));
+      log('[nl-agent] gemini 호출 실패:', describeError(e));
       return `${llmUserMessage(e)}${sideEffectsSummary(toolkit.sideEffects)}`;
     }
 
@@ -78,13 +76,13 @@ export async function runNlAgent(text, deadline, opts = {}) {
       return resp.text || `✅ 처리했어요.${sideEffectsSummary(toolkit.sideEffects)}`;
     }
 
-    provider.appendAssistant(messages, resp.assistant);
+    gemini.appendAssistant(messages, resp.assistant);
     const results = [];
     for (const tc of resp.toolCalls) {
       const { content, is_error } = await toolkit.run(tc.name, tc.input);
       results.push({ id: tc.id, content, is_error });
     }
-    provider.appendToolResults(messages, results);
+    gemini.appendToolResults(messages, results);
   }
 
   if (toolkit.sideEffects.length > 0) {

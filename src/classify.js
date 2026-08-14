@@ -1,9 +1,9 @@
 // classify.js — 가맹점명 → 카테고리 분류 (3단계).
 //   1) 키워드 규칙 (비용 0, 즉시)
-//   2) LLM 폴백 (LLM_PROVIDER로 선택된 프로바이더 키 설정 시, 단발 호출)
+//   2) LLM 폴백 (GEMINI_API_KEY 설정 시, 단발 호출)
 //   3) 기본값 (시간대 기반) + 회신에 자동추정 표시
 // 카테고리 후보는 당월 실데이터(period_categories) 기준 — 없는 이름은 절대 만들지 않는다.
-import { getProvider } from './llm.js';
+import * as gemini from './gemini.js';
 import { describeError } from './errors.js';
 
 const RULES = [
@@ -58,12 +58,11 @@ export function classifyByKeywords(merchant, time, categoryNames) {
   return null;
 }
 
-// 2단계: LLM 폴백 (프로바이더 미설정이면 null). 알려진 카테고리 이름만 허용.
+// 2단계: LLM 폴백 (키 미설정이면 null). 알려진 카테고리 이름만 허용.
 export async function classifyWithLlm(merchant, time, amount, categoryNames) {
-  const provider = getProvider();
-  if (!provider || !merchant || categoryNames.length === 0) return null;
+  if (!gemini.configured() || !merchant || categoryNames.length === 0) return null;
   try {
-    const text = await provider.simpleText({
+    const text = await gemini.simpleText({
       system: `당신은 법인카드 지출 분류기다. 가맹점 정보를 보고 반드시 다음 중 하나의 카테고리 이름만 출력한다(다른 말 금지): ${categoryNames.join(', ')}`,
       user: `가맹점: ${merchant}\n결제시각: ${time ?? '모름'}\n금액: ${amount}원`,
       maxTokens: 64,

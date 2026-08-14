@@ -16,7 +16,6 @@ const server_ = http.createServer((req, res) => {
 before(async () => {
   server = server_;
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
-  process.env.LLM_PROVIDER = 'gemini';
   process.env.GEMINI_API_KEY = 'test-key';
   process.env.GEMINI_BASE_URL = `http://127.0.0.1:${server.address().port}/`;
   classify = await import('../src/classify.js');

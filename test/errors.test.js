@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { describeError, llmUserMessage, serviceUserMessage, isConfigError } from '../src/errors.js';
 
-// OpenAI/Anthropic SDK가 실제로 던지는 형태를 모사
+// SDK가 실제로 던지는 형태를 모사
 const unauthorized = Object.assign(new Error('401 status code (no body)'), { status: 401 });
 const forbidden = Object.assign(new Error('403 status code (no body)'), { status: 403 });
 const rateLimit = Object.assign(new Error('429 status code (no body)'), { status: 429 });
@@ -16,8 +16,8 @@ const notFoundWithBody = Object.assign(new Error('404 Not Found'), {
   status: 404,
   error: { code: 404, message: 'models/gemini-9.9-flash is not found for API version v1beta' },
 });
-// Anthropic SDK는 본문을 한 겹 더 감싼다
-const anthropicShape = Object.assign(new Error('400 Bad Request'), {
+// 본문을 한 겹 더 감싸는 SDK도 있다
+const nestedShape = Object.assign(new Error('400 Bad Request'), {
   status: 400,
   error: { type: 'error', error: { type: 'invalid_request_error', message: 'max_tokens too large' } },
 });
@@ -44,7 +44,7 @@ test('describeError: 상위 API 오류 본문을 함께 남긴다', () => {
 });
 
 test('describeError: 본문이 한 겹 더 감싸인 형태도 꺼낸다', () => {
-  assert.match(describeError(anthropicShape), /max_tokens too large/);
+  assert.match(describeError(nestedShape), /max_tokens too large/);
 });
 
 test('describeError: 배열로 감싼 본문에서도 메시지를 꺼낸다', () => {

@@ -33,7 +33,7 @@ before(async () => {
   // 모듈 최상단에서 env를 읽으므로 반드시 import 전에 설정한다
   process.env.GEMINI_API_KEY = 'test-key';
   process.env.GEMINI_BASE_URL = `http://127.0.0.1:${port}/`;
-  gemini = await import('../src/providers/gemini.js');
+  gemini = await import('../src/gemini.js');
 });
 
 after(() => server.close());

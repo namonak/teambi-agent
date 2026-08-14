@@ -36,7 +36,7 @@ after(() => server.close());
 async function bodySentWith(envValue, tag) {
   if (envValue === undefined) delete process.env.GEMINI_REASONING_EFFORT;
   else process.env.GEMINI_REASONING_EFFORT = envValue;
-  const gemini = await import(`../src/providers/gemini.js?case=${tag}`);
+  const gemini = await import(`../src/gemini.js?case=${tag}`);
   received.length = 0;
   await gemini.call({ messages: [{ role: 'user', content: 'x' }], tools: [], timeout: 5000 });
   return received[0];

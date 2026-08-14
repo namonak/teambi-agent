@@ -1,4 +1,4 @@
-// provider-config.test.js — 프로바이더의 실제 설정을 기동 시 확인할 수 있어야 한다.
+// provider-config.test.js — Gemini 설정을 기동 시 확인할 수 있어야 한다.
 // 배포 사고: 404가 났는데 어떤 모델·엔드포인트로 호출했는지 로그에 없어
 // 컨테이너에 직접 들어가 확인해야 했다.
 import { test } from 'node:test';
@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 async function geminiConfig(env, tag) {
   for (const k of ['GEMINI_MODEL', 'GEMINI_BASE_URL', 'GEMINI_REASONING_EFFORT']) delete process.env[k];
   Object.assign(process.env, env);
-  const m = await import(`../src/providers/gemini.js?case=${tag}`);
-  return m.config();
+  const m = await import(`../src/gemini.js?case=${tag}`);
+  return m.status();
 }
 
 test('기본 설정: 모델 이름을 그대로 보고한다', async () => {
@@ -36,17 +36,4 @@ test('공백만 있는 값은 기본값으로 되돌린다', async () => {
   assert.equal(c.model, 'gemini-3.6-flash');
 });
 
-test('claude도 같은 형태로 설정을 보고한다', async () => {
-  const claude = await import('../src/providers/claude.js');
-  const c = claude.config();
-  assert.equal(typeof c.model, 'string');
-  assert.ok(Array.isArray(c.notes));
-});
 
-test('providerStatus가 프로바이더 설정을 함께 싣는다', async () => {
-  process.env.LLM_PROVIDER = 'gemini';
-  process.env.GEMINI_API_KEY = 'k';
-  const llm = await import('../src/llm.js?case=withconfig');
-  const s = llm.providerStatus();
-  assert.equal(s.config.model, 'gemini-3.6-flash');
-});
