@@ -6,6 +6,9 @@ services:
       #   GIT_SHA=$(git rev-parse HEAD) docker compose up -d --build
       args:
         GIT_SHA: ${GIT_SHA:-}
+    # 이름을 명시하지 않으면 <프로젝트>-<서비스> = teambi-agent-teambi-agent가 되어
+    # Container Manager 이미지 목록에서 알아보기 어렵다.
+    image: teambi-agent:local
     container_name: teambi-agent
     restart: unless-stopped
     ports:
