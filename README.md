@@ -149,8 +149,11 @@ docker compose up -d --build
 
 | 로그 | 의미 |
 |---|---|
+| `🧠 자연어 처리: gemini · 모델 gemini-2.5-flash` | 정상. 실제 호출할 모델을 확인할 수 있음 |
 | `⚠️ LLM_PROVIDER 값에 공백/개행이 섞여 있어요` | 편집 중 CR·공백 혼입 (Windows 줄바꿈 등) |
 | `⚠️ LLM_PROVIDER='...' 는 알 수 없는 값` | 오타 — `claude` 또는 `gemini`만 유효 |
+| `⚠️ GEMINI_MODEL 값에 공백/개행이 섞여 있어요` | 모델명 오염 — 방치하면 호출 시 404 |
+| `⚠️ 엔드포인트가 재정의됨: ...` | `GEMINI_BASE_URL`이 설정돼 공식 주소로 안 나감 |
 | `ℹ️ GEMINI_API_KEY 미설정` | 해당 키가 비어 있음 |
 | `[webhook] HMAC 검증 실패: 서명 불일치 ...` | `TEAMS_WEBHOOK_SECRET`이 Teams의 것과 다름 |
 | `[webhook] HMAC 검증 실패: Authorization 헤더 없음 ...` | 리버스 프록시가 헤더를 떨구고 있음 |

@@ -38,7 +38,8 @@ const server = app.listen(PORT, () => {
   const llm = providerStatus();
   if (llm.dirty) console.warn(`[teambi-agent] ⚠️ LLM_PROVIDER 값에 공백/개행이 섞여 있어요: ${JSON.stringify(llm.requested)}`);
   if (!llm.known) console.warn(`[teambi-agent] ⚠️ LLM_PROVIDER='${llm.requested}' 는 알 수 없는 값 — ${llm.name}로 폴백합니다 (claude|gemini)`);
-  if (llm.configured) console.log(`[teambi-agent] 🧠 자연어 처리: ${llm.name} (LLM_PROVIDER)`);
+  for (const note of llm.config.notes) console.warn(`[teambi-agent] ⚠️ ${note}`);
+  if (llm.configured) console.log(`[teambi-agent] 🧠 자연어 처리: ${llm.name} · 모델 ${llm.config.model}`);
   else console.warn(`[teambi-agent] ℹ️ ${llm.hint} 미설정 — 자연어 처리는 비활성(정형 SMS만 동작) [LLM_PROVIDER=${llm.name}]`);
   if (notifyEnabled()) console.log('[teambi-agent] 📮 자연어 비동기 모드: 즉시 접수 → Workflows 웹후크 사후 게시');
   else console.log('[teambi-agent] ℹ️ TEAMS_INCOMING_WEBHOOK_URL 미설정 — 자연어는 5초 동기 모드');

@@ -1,6 +1,7 @@
 // llm.js — LLM 프로바이더 선택기.
 // .env의 LLM_PROVIDER(claude|gemini)로 전환. 각 프로바이더는 동일 인터페이스를 구현한다:
-//   name, configured(), setupHint, toTools(tools), initMessages(system, userText),
+//   name, configured(), setupHint, config() -> {model, notes[]},
+//   toTools(tools), initMessages(system, userText),
 //   call({system, messages, tools, timeout}) -> {text, toolCalls:[{id,name,input}], isToolUse, assistant},
 //   appendAssistant(messages, assistant), appendToolResults(messages, results),
 //   simpleText({system, user, maxTokens, timeout}) -> string
@@ -33,6 +34,7 @@ export function providerStatus() {
     dirty: REQUESTED !== NORMALIZED && REQUESTED !== '', // 공백·CR 혼입 여부
     configured: p.configured(), // 해당 키가 채워져 있는지
     hint: p.setupHint, // 필요한 환경변수 이름
+    config: p.config(), // { model, notes } — 실제로 무엇을 어디로 호출하는지
   };
 }
 

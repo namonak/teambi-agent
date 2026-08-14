@@ -2,14 +2,26 @@
 // 공통 인터페이스(llm.js 참조)를 Anthropic Messages API로 구현한다.
 import Anthropic from '@anthropic-ai/sdk';
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5';
+const clean = (v) => (v ?? '').trim();
+
+const RAW_MODEL = process.env.ANTHROPIC_MODEL;
+const MODEL = clean(RAW_MODEL) || 'claude-haiku-4-5';
 
 let client = null;
 const getClient = () => (client ??= new Anthropic({ maxRetries: 0 })); // 타임아웃은 호출별 지정
 
 export const name = 'claude';
-export const configured = () => Boolean(process.env.ANTHROPIC_API_KEY);
+export const configured = () => Boolean(clean(process.env.ANTHROPIC_API_KEY));
 export const setupHint = 'ANTHROPIC_API_KEY';
+
+// 기동 로그용 — gemini.js와 같은 형태로 실제 설정을 보고한다
+export function config() {
+  const notes = [];
+  if (RAW_MODEL && RAW_MODEL !== RAW_MODEL.trim()) {
+    notes.push('ANTHROPIC_MODEL 값에 공백/개행이 섞여 있어요');
+  }
+  return { model: MODEL, notes };
+}
 
 // 도구 정의는 이미 Anthropic 포맷({name, description, input_schema}) — 변환 불필요
 export const toTools = (tools) => tools;
