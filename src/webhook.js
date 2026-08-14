@@ -1,7 +1,7 @@
 // webhook.js — Teams Outgoing Webhook 핸들러.
 // HMAC 검증 → activity.id 중복 제거 → SMS/자연어 라우팅 → 한국어 회신.
 // 회신은 항상 {type:'message', text} + HTTP 200 (HMAC 실패만 401).
-import { verifyTeamsHmac } from './hmac.js';
+import { checkTeamsHmac } from './hmac.js';
 import { extractUserText } from './text.js';
 import { looksLikeCardSms, parseCardSms } from './sms-parser.js';
 import { classifyCategory } from './classify.js';
@@ -149,8 +149,10 @@ export function createWebhookHandler() {
 
   return async function webhook(req, res) {
     // 1) HMAC 검증 (원문 바이트는 server.js의 express.json verify 훅이 보존)
-    if (!verifyTeamsHmac(req.rawBody, req.headers.authorization, process.env.TEAMS_WEBHOOK_SECRET)) {
-      console.warn('[webhook] HMAC 검증 실패');
+    const hmac = checkTeamsHmac(req.rawBody, req.headers.authorization, process.env.TEAMS_WEBHOOK_SECRET);
+    if (!hmac.ok) {
+      // 사유는 로그에만 — 회신 문구는 그대로 두어 외부에 힌트를 주지 않는다
+      console.warn('[webhook] HMAC 검증 실패:', hmac.reason);
       return res.status(401).json(msg('인증에 실패했어요. 웹훅 보안 토큰 설정을 확인해 주세요.'));
     }
 
