@@ -26,7 +26,7 @@ Teams 채널 ── @장부장 멘션 ──▶ teambi-agent ── REST API ─
 > 가맹점: 매머드익스프레스 서초마제스타시티점
 > 커피 잔액: 43,400원 / 210,000원
 
-**자연어** (Claude 또는 Gemini API 키 설정 시 — 아래 [AI 프로바이더](#ai-프로바이더-claude--gemini) 참조):
+**자연어** (Gemini API 키 설정 시 — 아래 [Gemini 설정](#gemini-설정) 참조):
 
 > @장부장 어제 회식 8만원 카드1로 썼어
 > @장부장 아까 그 커피 1,600원짜리 2,000원으로 수정해줘
@@ -40,7 +40,7 @@ Teams 채널 ── @장부장 멘션 ──▶ teambi-agent ── REST API ─
 |---|---|---|
 | 카드 승인 SMS | 정규식 파싱 → 키워드 분류(커피/간식/회식/야근) → 즉시 기입 | ❌ (분류 애매할 때만 폴백) |
 | 승인취소 SMS | 금액+카드+가맹점 매칭 → 1건이면 자동 삭제 | ❌ |
-| 자연어 | LLM tool-use 루프(Claude/Gemini 선택) — 조회/기입/수정/삭제 도구 6종 | ✅ |
+| 자연어 | Gemini tool-use 루프 — 조회/기입/수정/삭제 도구 6종 | ✅ |
 
 - **teamMoneyManager는 수정하지 않습니다.** 모든 조작은 기존 REST API(`/api/transactions` 등)로 수행합니다.
 - Teams Outgoing Webhook의 **HMAC-SHA256 서명을 검증**하고, 재시도로 인한 **중복 기입을 방지**(activity.id 기준)합니다.
@@ -56,7 +56,7 @@ cp .env.example .env
 #   TMM_BASE_URL      teamMoneyManager 주소 (같은 서버면 http://localhost:49876)
 #   TMM_PASSWORD      teamMoneyManager 로그인 비밀번호
 #   TEAMS_CARD_MAP    카드 문자 식별번호 → 카드슬롯 매핑 (예: 3900:1,2903:2)
-#   ANTHROPIC_API_KEY (선택) 자연어 처리용 — console.anthropic.com에서 발급
+#   GEMINI_API_KEY    (선택) 자연어 처리용 — aistudio.google.com/apikey에서 발급
 #   TEAMS_WEBHOOK_SECRET  아래 3단계에서 발급받아 입력
 ```
 
@@ -150,8 +150,6 @@ docker compose up -d --build
 | 로그 | 의미 |
 |---|---|
 | `🧠 자연어 처리: gemini · 모델 gemini-3.6-flash` | 정상. 실제 호출할 모델을 확인할 수 있음 |
-| `⚠️ LLM_PROVIDER 값에 공백/개행이 섞여 있어요` | 편집 중 CR·공백 혼입 (Windows 줄바꿈 등) |
-| `⚠️ LLM_PROVIDER='...' 는 알 수 없는 값` | 오타 — `claude` 또는 `gemini`만 유효 |
 | `⚠️ GEMINI_MODEL 값에 공백/개행이 섞여 있어요` | 모델명 오염 — 방치하면 호출 시 404 |
 | `⚠️ 엔드포인트가 재정의됨: ...` | `GEMINI_BASE_URL`이 설정돼 공식 주소로 안 나감 |
 | `ℹ️ GEMINI_API_KEY 미설정` | 해당 키가 비어 있음 |
@@ -168,7 +166,7 @@ docker compose up -d --build
 ## 개발
 
 ```bash
-npm test          # 단위 테스트 (파서/분류/HMAC/텍스트 정제/LLM 프로바이더/Workflows 알림)
+npm test          # 단위 테스트 (파서/분류/HMAC/텍스트 정제/Gemini 요청/오류 매핑/Workflows 알림)
 npm run dev       # watch 모드
 ```
 
@@ -180,41 +178,35 @@ src/
 ├── text.js        # 멘션/HTML 정제
 ├── sms-parser.js  # 카드 SMS 정규식 파서
 ├── classify.js    # 카테고리 분류 (키워드 → LLM 폴백 → 기본값)
-├── nl-agent.js    # LLM tool-use 루프 (동기 4.2s / 비동기 25s, 프로바이더 중립)
-├── llm.js         # 프로바이더 선택기 (LLM_PROVIDER=claude|gemini)
+├── nl-agent.js    # Gemini tool-use 루프 (동기 4.2s / 비동기 25s)
+├── gemini.js      # Gemini 호출 (OpenAI 호환 엔드포인트 경유)
+├── errors.js      # 외부 호출 실패 → 로그 문구 / 채널 회신 문구 매핑
+├── version.js     # 빌드 식별 정보 (기동 로그 · /health)
 ├── teams-notify.js# Workflows 웹후크 사후 게시 (Adaptive Card)
-├── providers/
-│   ├── claude.js  # Anthropic Messages API
-│   └── gemini.js  # Gemini (OpenAI 호환 엔드포인트)
 ├── tools.js       # LLM 도구 6종
 ├── tmm-client.js  # teamMoneyManager REST 클라이언트
 └── util.js        # 날짜/금액/설정 유틸
 ```
 
-## AI 프로바이더 (Claude / Gemini)
+## Gemini 설정
 
-자연어 처리와 분류 폴백에 쓸 LLM을 `.env`의 `LLM_PROVIDER`로 선택합니다:
+자연어 처리와 분류 폴백에 Gemini를 사용합니다. Google의 **OpenAI 호환 엔드포인트**를 `openai` SDK로 호출합니다(네이티브 API가 아닙니다).
 
-```
-LLM_PROVIDER=claude   # 기본값. ANTHROPIC_API_KEY 필요
-LLM_PROVIDER=gemini   # GEMINI_API_KEY 필요 (OpenAI 호환 엔드포인트 경유)
-```
-
-| | Claude (기본) | Gemini |
-|---|---|---|
-| 모델 | `claude-haiku-4-5` (`ANTHROPIC_MODEL`로 변경) | `gemini-3.6-flash` (`GEMINI_MODEL`로 변경) |
-| 키 발급 | [console.anthropic.com](https://console.anthropic.com) | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
-| 비용 | 유료 — 팀 사용량 기준 **월 몇백 원** | **무료 티어 있음** (카드 등록 불필요, 예: 15 RPM · 1,000 RPD) |
-| 데이터 | 학습에 사용 안 함 | ⚠️ **무료 티어는 입력·출력이 Google 제품 개선(학습)에 사용될 수 있음** — 가맹점명·금액·팀원 이름이 전송되므로 회사 데이터 정책 확인 후 사용 |
+| 항목 | 값 |
+|---|---|
+| 키 발급 | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — 무료 티어 있음, 카드 등록 불필요 |
+| 기본 모델 | `gemini-3.6-flash` (`GEMINI_MODEL`로 변경) |
+| 비용 | 무료 티어로 0원까지 가능 (예: 15 RPM · 1,000 RPD) |
+| 데이터 | ⚠️ **무료 티어는 입력·출력이 Google 제품 개선(학습)에 사용될 수 있음** — 가맹점명·금액·팀원 이름이 전송되므로 회사 데이터 정책 확인 후 사용 |
 
 Gemini는 **thinking(추론)이 기본 On**이라 도구 호출 한 번이 수 초 이상 걸려 Teams 5초 예산을 넘깁니다. 그래서 `reasoning_effort=minimal`로 낮춰 호출합니다(`GEMINI_REASONING_EFFORT`로 변경 가능).
 
-> ⚠️ **Gemini 3 계열은 thinking을 완전히 끌 수 없습니다**([공식 문서](https://ai.google.dev/gemini-api/docs/openai): *"Reasoning cannot be turned off for Gemini 2.5 Pro or 3 models"*). `minimal`이 최소값입니다. 따라서 5초 동기 모드로는 자연어 처리가 시간을 넘길 수 있으니 **`TEAMS_INCOMING_WEBHOOK_URL`(비동기 모드, 25초 예산) 설정을 강력히 권장**합니다.
+> ⚠️ **Gemini 3 계열은 thinking을 완전히 끌 수 없습니다**([공식 문서](https://ai.google.dev/gemini-api/docs/openai): *"Reasoning cannot be turned off for Gemini 2.5 Pro or 3 models"*). `minimal`이 최소값입니다. 따라서 5초 동기 모드로는 자연어 처리가 시간을 넘길 수 있으니 **[비동기 모드](#4-선택권장-자연어-비동기-모드--workflows-웹후크) 설정을 강력히 권장**합니다.
 >
 > `gemini-2.5-flash`는 **신규 사용자에게 차단**되어 호출 시 404가 납니다(`/models` 목록에는 여전히 나옵니다). 2.5 계열을 쓸 수 있는 기존 계정이라면 `GEMINI_REASONING_EFFORT=none`으로 thinking을 완전히 끌 수 있습니다.
 
-프로바이더를 바꾸면 컨테이너를 **재생성**해야 적용됩니다: `docker compose down && docker compose up -d`
+모델을 바꾸면 컨테이너를 **재생성**해야 적용됩니다 — [업데이트(재배포)](#5-업데이트재배포) 참고.
 
 ## 비용
 
-카드 문자 기입은 대부분 키워드 분류로 처리되어 **API 호출이 발생하지 않습니다**. LLM이 쓰이는 것은 자연어 명령과 분류가 애매한 소수 케이스뿐이라, Claude 기준 월 몇백 원 수준이며 Gemini 무료 티어로는 0원까지 가능합니다(위 데이터 정책 주의).
+카드 문자 기입은 대부분 키워드 분류로 처리되어 **API 호출이 발생하지 않습니다**. Gemini가 쓰이는 것은 자연어 명령과 분류가 애매한 소수 케이스뿐이라, 무료 티어 한도 안에서 **0원**으로 운영할 수 있습니다(위 데이터 정책 주의).

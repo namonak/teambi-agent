@@ -22,9 +22,9 @@
 
 | 항목 | 값 |
 |------|-----|
-| 기술 스택 | Node.js 20+ (ESM), Express 4, LLM_PROVIDER=claude(@anthropic-ai/sdk, claude-haiku-4-5)\|gemini(openai SDK 경유) |
+| 기술 스택 | Node.js 20+ (ESM), Express 4, Gemini(gemini-3.6-flash) — openai SDK로 OpenAI 호환 엔드포인트 호출 |
 | 실행 방법 | `npm run dev` (개발) / `docker compose up -d` (배포, 포트 49877) |
-| 테스트 | `npm test` (node:test — parser/classify/hmac/text/providers/teams-notify) |
+| 테스트 | `npm test` (node:test — parser/classify/hmac/text/gemini/errors/version/teams-notify) |
 | 연동 대상 | teamMoneyManager REST API (`TMM_BASE_URL`, 세션 쿠키 로그인) |
 | 수신 경로 | Teams Outgoing Webhook `POST /webhook` (HMAC-SHA256 검증, 5초 응답 제한) |
 | 상태 | 개발 중 |
