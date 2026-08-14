@@ -41,17 +41,30 @@ function sideEffectsSummary(sideEffects) {
   return `\n지금까지 처리된 것:\n${sideEffects.map((s) => `- ${s.action}: ${s.summary}`).join('\n')}`;
 }
 
+// 타임아웃 시 어느 구간이 예산을 먹었는지 로그 한 줄로 남긴다.
+// 이게 없어서 컨테이너에 들어가 구간별로 재야 했다(범인은 createToolkit 1,858ms였다).
+export function budgetSummary(spent, remaining) {
+  return (
+    `준비 ${spent.toolkit}ms · LLM ${spent.llm}ms(${spent.rounds}라운드) · ` +
+    `도구 ${spent.tools}ms · 남은 시간 ${remaining}ms`
+  );
+}
+
 // opts.maxRounds — 라운드 수 (기본 3; 비동기 모드에선 여유 있게)
 export async function runNlAgent(text, deadline, opts = {}) {
   if (!gemini.configured()) return gemini.setupMessage();
   const maxRounds = opts.maxRounds ?? MAX_ROUNDS;
+  const spent = { toolkit: 0, llm: 0, tools: 0, rounds: 0 };
+  const since = (t) => Date.now() - t;
 
   let toolkit;
+  const tToolkit = Date.now();
   try {
     toolkit = await createToolkit();
   } catch (e) {
     return `⚠️ teamMoneyManager 연결에 실패했어요: ${e.message}`;
   }
+  spent.toolkit = since(tToolkit);
 
   const system = buildSystem(toolkit);
   const tools = gemini.toTools(toolkit.tools);
@@ -62,15 +75,20 @@ export async function runNlAgent(text, deadline, opts = {}) {
     if (remaining < 700) break;
 
     let resp;
+    const tLlm = Date.now();
     try {
       resp = await gemini.call({ system, messages, tools, timeout: remaining });
     } catch (e) {
+      spent.llm += since(tLlm);
       // 원문은 채널에 노출하지 않고 로그에만 남긴다(어느 한도를 넘겼는지 등은 로그로 확인).
       // 설정 오류(401/403)는 저절로 낫지 않으니 error로 올려 눈에 띄게 한다.
       const log = isConfigError(e) ? console.error : console.warn;
       log('[nl-agent] gemini 호출 실패:', describeError(e));
+      log(`[nl-agent] 예산 소진 — ${budgetSummary(spent, deadline - Date.now())}`);
       return `${llmUserMessage(e)}${sideEffectsSummary(toolkit.sideEffects)}`;
     }
+    spent.llm += since(tLlm);
+    spent.rounds += 1;
 
     if (!resp.isToolUse) {
       return resp.text || `✅ 처리했어요.${sideEffectsSummary(toolkit.sideEffects)}`;
@@ -78,13 +96,16 @@ export async function runNlAgent(text, deadline, opts = {}) {
 
     gemini.appendAssistant(messages, resp.assistant);
     const results = [];
+    const tTools = Date.now();
     for (const tc of resp.toolCalls) {
       const { content, is_error } = await toolkit.run(tc.name, tc.input);
       results.push({ id: tc.id, content, is_error });
     }
+    spent.tools += since(tTools);
     gemini.appendToolResults(messages, results);
   }
 
+  console.warn(`[nl-agent] 예산 소진 — ${budgetSummary(spent, deadline - Date.now())}`);
   if (toolkit.sideEffects.length > 0) {
     return `⏱️ 응답 시간이 초과됐어요.${sideEffectsSummary(toolkit.sideEffects)}\n⚠️ 위 내역은 이미 기입됐어요 — 같은 명령을 다시 보내면 중복 기입됩니다. 웹에서 확인해 주세요.`;
   }
