@@ -4,6 +4,7 @@
 //   3) 기본값 (시간대 기반) + 회신에 자동추정 표시
 // 카테고리 후보는 당월 실데이터(period_categories) 기준 — 없는 이름은 절대 만들지 않는다.
 import { getProvider } from './llm.js';
+import { describeError } from './errors.js';
 
 const RULES = [
   {
@@ -70,8 +71,11 @@ export async function classifyWithLlm(merchant, time, amount, categoryNames) {
     });
     const name = categoryNames.find((n) => text === n || text.includes(n));
     return name ? { name, source: 'llm' } : null;
-  } catch {
-    return null; // 분류 폴백 실패는 치명적이지 않음 → 3단계로
+  } catch (e) {
+    // 폴백 실패는 치명적이지 않아 3단계(기본값)로 강등한다.
+    // 다만 429인지 타임아웃인지 흔적이 없으면 운영 중 원인 추적이 불가능하므로 로그는 남긴다.
+    console.warn('[classify] LLM 폴백 실패:', describeError(e));
+    return null;
   }
 }
 

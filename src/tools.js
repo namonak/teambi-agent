@@ -2,6 +2,7 @@
 // 도구 실행 결과는 tool_result 문자열로 반환하고, 기입/수정/삭제는 sideEffects에 기록해
 // 타임아웃 시에도 "지금까지 처리된 것"을 정직하게 회신할 수 있게 한다.
 import * as tmm from './tmm-client.js';
+import { serviceUserMessage } from './errors.js';
 import { currentPeriod, todayStr, fmtWon, cardLabel } from './util.js';
 
 const TOOL_DEFS = [
@@ -171,7 +172,10 @@ export async function createToolkit() {
           return { content: `알 수 없는 도구: ${name}`, is_error: true };
       }
     } catch (e) {
-      if (e.status) return { content: `외부 서비스 처리 중 오류가 발생했어요 (HTTP ${e.status})`, is_error: true };
+      // 이 문자열은 tool_result로 LLM에 되돌아간다.
+      // 외부 API 오류는 원문을 감추고(상태 코드만), 도구 사용 오류(카테고리 미존재 등)는
+      // LLM이 스스로 되묻거나 고쳐 부를 수 있도록 원문을 남긴다.
+      if (e.status) return { content: serviceUserMessage(e), is_error: true };
       return { content: `오류: ${e.message}`, is_error: true };
     }
   }

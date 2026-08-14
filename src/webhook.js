@@ -7,6 +7,7 @@ import { looksLikeCardSms, parseCardSms } from './sms-parser.js';
 import { classifyCategory } from './classify.js';
 import { runNlAgent } from './nl-agent.js';
 import { notifyEnabled, postToChannel } from './teams-notify.js';
+import { describeError, serviceUserMessage } from './errors.js';
 import * as tmm from './tmm-client.js';
 import { currentPeriod, parseCardMap, fmtWon, fmtDateShort, cardLabel } from './util.js';
 
@@ -31,6 +32,19 @@ function dedupeSet(id, entry) {
 }
 
 const msg = (text) => ({ type: 'message', text });
+
+// 회신 끝에 붙일 잔액 줄. 부가 정보이므로 실패해도 회신을 막지 않고 빈 문자열로 넘어간다.
+// (조회 실패 이유는 로그로만 — 사용자는 기입/삭제가 성공했는지가 중요하다)
+export async function balanceLineFor(period, categoryId) {
+  try {
+    const d = await tmm.getDashboard(period);
+    const c = d.categories.find((x) => x.id === categoryId);
+    return c ? `\n${c.name} 잔액: ${fmtWon(c.remaining)} / ${fmtWon(c.allocated)}` : '';
+  } catch (e) {
+    console.warn('[webhook] 잔액 조회 실패:', describeError(e));
+    return '';
+  }
+}
 
 // --- SMS 승인 흐름 ---------------------------------------------------------
 async function handleSmsApproval(parsed, cardMap) {
@@ -58,13 +72,7 @@ async function handleSmsApproval(parsed, cardMap) {
     memo: parsed.merchant ?? null,
   });
 
-  // 기입 후 잔액 조회 (실패해도 회신은 성공으로)
-  let balanceLine = '';
-  try {
-    const d = await tmm.getDashboard(period);
-    const c = d.categories.find((x) => x.id === category.id);
-    if (c) balanceLine = `\n${c.name} 잔액: ${fmtWon(c.remaining)} / ${fmtWon(c.allocated)}`;
-  } catch (e) { console.warn('[webhook] 잔액 조회 실패:', e.message); }
+  const balanceLine = await balanceLineFor(period, category.id);
 
   const notes = [];
   if (card === null && parsed.cardDigits) {
@@ -101,12 +109,7 @@ async function handleSmsCancel(parsed, cardMap) {
   if (candidates.length === 1) {
     const target = candidates[0];
     await tmm.deleteTransaction(target.id);
-    let balanceLine = '';
-    try {
-      const d = await tmm.getDashboard(period);
-      const c = d.categories.find((x) => x.id === target.period_category_id);
-      if (c) balanceLine = `\n${c.name} 잔액: ${fmtWon(c.remaining)} / ${fmtWon(c.allocated)}`;
-    } catch (e) { console.warn('[webhook] 잔액 조회 실패:', e.message); }
+    const balanceLine = await balanceLineFor(period, target.period_category_id);
     return (
       `↩️ 승인취소 처리: #${target.id} 삭제\n` +
       `${fmtDateShort(target.date)} · ${fmtWon(target.amount)} · ${target.category_name ?? target.member_name ?? ''}${target.memo ? ` · ${target.memo}` : ''}` +
@@ -125,10 +128,7 @@ async function handleSmsCancel(parsed, cardMap) {
 async function processNlAsync(text, requester) {
   let result;
   try {
-    result = await runNlAgent(text, Date.now() + ASYNC_DEADLINE_MS, {
-      maxRounds: ASYNC_MAX_ROUNDS,
-      retry429: true,
-    });
+    result = await runNlAgent(text, Date.now() + ASYNC_DEADLINE_MS, { maxRounds: ASYNC_MAX_ROUNDS });
   } catch (e) {
     console.error('[webhook] 비동기 처리 오류:', e);
     result = '😵 처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
@@ -193,8 +193,8 @@ export function createWebhookHandler() {
         reply = await runNlAgent(text, deadline);
       }
     } catch (e) {
-      console.error('[webhook] 처리 오류:', e);
-      reply = `😵 처리 중 문제가 생겼어요: ${e.status ? `서버 응답 ${e.status}` : '내부 오류'}. 잠시 후 다시 시도해 주세요.`;
+      console.error('[webhook] 처리 오류:', describeError(e));
+      reply = `😵 ${serviceUserMessage(e)}`;
     }
 
     dedupeSet(id, { state: 'done', reply });

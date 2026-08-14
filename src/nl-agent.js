@@ -6,12 +6,11 @@
 //   - 타임아웃돼도 sideEffects로 "지금까지 처리된 것"을 정직하게 회신
 import { getProvider, setupMessage } from './llm.js';
 import { createToolkit } from './tools.js';
+import { describeError, llmUserMessage } from './errors.js';
 import { todayStr, fmtWon } from './util.js';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const MAX_ROUNDS = 3;
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function buildSystem(toolkit) {
   const now = new Date();
@@ -44,7 +43,6 @@ function sideEffectsSummary(sideEffects) {
 }
 
 // opts.maxRounds — 라운드 수 (기본 3; 비동기 모드에선 여유 있게)
-// opts.retry429 — true면 429(무료 티어 한도) 시 5초 대기 후 1회 재시도 (비동기 모드 전용)
 export async function runNlAgent(text, deadline, opts = {}) {
   const provider = getProvider();
   if (!provider) return setupMessage();
@@ -60,7 +58,6 @@ export async function runNlAgent(text, deadline, opts = {}) {
   const system = buildSystem(toolkit);
   const tools = provider.toTools(toolkit.tools);
   const messages = provider.initMessages(system, text);
-  let retried429 = false;
 
   for (let round = 0; round < maxRounds; round++) {
     const remaining = deadline - Date.now();
@@ -70,24 +67,9 @@ export async function runNlAgent(text, deadline, opts = {}) {
     try {
       resp = await provider.call({ system, messages, tools, timeout: remaining });
     } catch (e) {
-      // 무료 티어 한도(429): 비동기 모드면 잠시 쉬었다 1회 재시도
-      if (opts.retry429 && !retried429 && e?.status === 429 && deadline - Date.now() > 8000) {
-        retried429 = true;
-        console.warn(`[nl-agent] ${provider.name} 429 — 5초 대기 후 재시도`);
-        await sleep(5000);
-        round--;
-        continue;
-      }
-      // API 오류/타임아웃 — 채널엔 노출하지 않고 로그에 상세(어느 한도 초과인지 등)를 남긴다
-      console.warn(
-        `[nl-agent] ${provider.name} API 오류:`,
-        e?.status ?? '',
-        e?.message ?? e?.name ?? String(e),
-      );
-      if (e?.status === 429) {
-        return `⏳ AI 사용량 한도에 걸렸어요(무료 티어). 잠시 후(분당 한도) 또는 내일(일일 한도) 다시 시도해 주세요.${sideEffectsSummary(toolkit.sideEffects)}`;
-      }
-      return `😵 AI 처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.${sideEffectsSummary(toolkit.sideEffects)}`;
+      // 원문은 채널에 노출하지 않고 로그에만 남긴다(어느 한도를 넘겼는지 등은 로그로 확인)
+      console.warn(`[nl-agent] ${provider.name} 호출 실패:`, describeError(e));
+      return `${llmUserMessage(e)}${sideEffectsSummary(toolkit.sideEffects)}`;
     }
 
     if (!resp.isToolUse) {
