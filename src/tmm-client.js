@@ -11,6 +11,12 @@ function ensureLogin() {
   return loginPromise;
 }
 
+// 기동 시 세션을 미리 만들어 둔다.
+// 세션 없는 첫 요청은 createToolkit에서 로그인 왕복까지 물어 1.8초를 쓰는데,
+// Teams 동기 예산이 4.2초뿐이라 그것만으로 타임아웃했다.
+// 실패는 그대로 던진다 — 기동을 막을지 로그만 남길지는 호출부가 정한다.
+export const warmUp = () => (sessionCookie ? Promise.resolve() : ensureLogin());
+
 async function login() {
   if (!BASE() || !process.env.TMM_PASSWORD) {
     throw new Error('TMM_BASE_URL / TMM_PASSWORD 환경변수가 설정되지 않았습니다');

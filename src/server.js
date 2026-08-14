@@ -3,6 +3,8 @@
 import express from 'express';
 import { createWebhookHandler } from './webhook.js';
 import * as gemini from './gemini.js';
+import * as tmm from './tmm-client.js';
+import { describeError } from './errors.js';
 import { notifyEnabled } from './teams-notify.js';
 import { versionInfo, versionLine } from './version.js';
 
@@ -41,6 +43,15 @@ const server = app.listen(PORT, () => {
   else console.warn(`[teambi-agent] ℹ️ ${llm.hint} 미설정 — 자연어 처리는 비활성(정형 SMS만 동작)`);
   if (notifyEnabled()) console.log('[teambi-agent] 📮 자연어 비동기 모드: 즉시 접수 → Workflows 웹후크 사후 게시');
   else console.log('[teambi-agent] ℹ️ TEAMS_INCOMING_WEBHOOK_URL 미설정 — 자연어는 5초 동기 모드');
+
+  // 세션 없는 첫 요청은 로그인 왕복까지 물어 준비에만 1.8초를 쓴다(측정값).
+  // 동기 모드 예산이 4.2초뿐이라 그것만으로 타임아웃하므로 미리 만들어 둔다.
+  // 실패해도 기동은 계속한다 — 요청 시점에 다시 로그인한다.
+  const warmStart = Date.now();
+  tmm.warmUp().then(
+    () => console.log(`[teambi-agent] 🔑 teamMoneyManager 세션 준비 완료 (${Date.now() - warmStart}ms)`),
+    (e) => console.warn('[teambi-agent] ⚠️ teamMoneyManager 세션 준비 실패 — 첫 요청이 느려집니다:', describeError(e)),
+  );
 });
 
 server.on('error', (e) => {
