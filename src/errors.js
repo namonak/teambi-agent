@@ -2,10 +2,19 @@
 // 원칙: 원문 메시지는 채널에 절대 노출하지 않고(내부 정보 유출 방지) 로그에만 남긴다.
 // 이 파일이 없던 시절 nl-agent/tools/webhook이 각자 분기를 들고 있어 문구가 어긋났다.
 
+// 상위 API가 오류 본문에 정답을 담아 보낸다(예: "models/xxx is not found for API
+// version v1beta"). SDK 요약 메시지만 남기면 그 정답이 버려진다.
+// OpenAI SDK는 e.error에 본문의 error 객체를, Anthropic SDK는 본문 전체를 담는다.
+const upstreamMessage = (e) =>
+  e?.error?.message ?? e?.error?.error?.message ?? e?.body?.error?.message ?? null;
+
 // 로그용 — 상태 코드가 있으면 앞에 붙이고 원문을 그대로 남긴다.
+// 여기서 나온 문자열은 로그 전용이다. 채널 회신에는 아래 두 함수만 쓴다.
 export function describeError(e) {
   const detail = e?.message ?? e?.name ?? String(e);
-  return e?.status ? `HTTP ${e.status} ${detail}` : detail;
+  const head = e?.status ? `HTTP ${e.status} ${detail}` : detail;
+  const upstream = upstreamMessage(e);
+  return upstream && !detail.includes(upstream) ? `${head} — ${upstream}` : head;
 }
 
 // SDK 타임아웃은 status가 없고 메시지/이름으로만 구분된다.

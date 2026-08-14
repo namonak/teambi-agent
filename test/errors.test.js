@@ -10,10 +10,46 @@ const overloaded = Object.assign(new Error('503 status code (no body)'), { statu
 const timedOut = Object.assign(new Error('Request timed out.'), { name: 'APIConnectionTimeoutError' });
 const unknown = new Error('socket hang up');
 
+// 상위 API가 오류 본문에 정답을 담아 보내는데 SDK 요약만 로그에 남기면 버려진다.
+// 예: 404 → "models/xxx is not found for API version v1beta"
+const notFoundWithBody = Object.assign(new Error('404 Not Found'), {
+  status: 404,
+  error: { code: 404, message: 'models/gemini-9.9-flash is not found for API version v1beta' },
+});
+// Anthropic SDK는 본문을 한 겹 더 감싼다
+const anthropicShape = Object.assign(new Error('400 Bad Request'), {
+  status: 400,
+  error: { type: 'error', error: { type: 'invalid_request_error', message: 'max_tokens too large' } },
+});
+// SDK가 이미 본문 메시지를 e.message에 넣어준 경우
+const alreadyInMessage = Object.assign(new Error('400 max_tokens too large'), {
+  status: 400,
+  error: { message: 'max_tokens too large' },
+});
+
 test('describeError: 상태 코드와 원문을 로그용으로 합친다', () => {
   assert.equal(describeError(rateLimit), 'HTTP 429 429 status code (no body)');
   assert.equal(describeError(timedOut), 'Request timed out.');
   assert.equal(describeError(unknown), 'socket hang up');
+});
+
+test('describeError: 상위 API 오류 본문을 함께 남긴다', () => {
+  assert.match(describeError(notFoundWithBody), /is not found for API version/);
+  assert.match(describeError(notFoundWithBody), /HTTP 404/);
+});
+
+test('describeError: 본문이 한 겹 더 감싸인 형태도 꺼낸다', () => {
+  assert.match(describeError(anthropicShape), /max_tokens too large/);
+});
+
+test('describeError: 이미 message에 있으면 중복해서 붙이지 않는다', () => {
+  const line = describeError(alreadyInMessage);
+  assert.equal(line.match(/max_tokens too large/g).length, 1);
+});
+
+test('상위 API 본문은 로그에만 — 채널 회신에는 절대 나오지 않는다', () => {
+  assert.doesNotMatch(llmUserMessage(notFoundWithBody), /is not found for API version/);
+  assert.doesNotMatch(serviceUserMessage(notFoundWithBody), /is not found for API version/);
 });
 
 test('llmUserMessage: 429는 사용량 한도 안내', () => {
