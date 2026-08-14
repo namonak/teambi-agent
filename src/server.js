@@ -4,6 +4,7 @@ import express from 'express';
 import { createWebhookHandler } from './webhook.js';
 import { getProvider } from './llm.js';
 import { notifyEnabled } from './teams-notify.js';
+import { versionInfo, versionLine } from './version.js';
 
 const PORT = Number(process.env.PORT || 49877);
 
@@ -18,7 +19,8 @@ app.use(
   }),
 );
 
-app.get('/health', (_req, res) => res.json({ ok: true, name: 'teambi-agent' }));
+// 로그를 볼 수 없는 상황에서도 배포 반영 여부를 확인할 수 있도록 버전을 함께 노출한다
+app.get('/health', (_req, res) => res.json({ ok: true, name: 'teambi-agent', ...versionInfo() }));
 
 app.post('/webhook', createWebhookHandler());
 
@@ -28,6 +30,8 @@ process.on('unhandledRejection', (e) => console.error('[teambi-agent] unhandledR
 process.on('uncaughtException', (e) => console.error('[teambi-agent] uncaughtException:', e));
 
 const server = app.listen(PORT, () => {
+  // 첫 줄에 고정 — 어떤 빌드가 도는지부터 확인할 수 있어야 한다
+  console.log(`[teambi-agent] 🏷️ ${versionLine()}`);
   console.log(`[teambi-agent] 장부장 대기 중 — http://localhost:${PORT}`);
   if (!process.env.TEAMS_WEBHOOK_SECRET) console.warn('[teambi-agent] ⚠️ TEAMS_WEBHOOK_SECRET 미설정 — 모든 웹훅 요청이 401 처리됩니다');
   const provider = getProvider();

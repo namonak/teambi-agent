@@ -13,6 +13,8 @@
 # Node
 node_modules/
 .env
+# 이미지 빌드 시 Dockerfile이 생성 (커밋 대상 아님)
+build-info.json
 npm-debug.log*
 .DS_Store
 

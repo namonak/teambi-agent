@@ -1,6 +1,11 @@
 services:
   teambi-agent:
-    build: .
+    build:
+      context: .
+      # 커밋 해시는 선택 — 넘기면 기동 로그에 함께 찍힌다.
+      #   GIT_SHA=$(git rev-parse HEAD) docker compose up -d --build
+      args:
+        GIT_SHA: ${GIT_SHA:-}
     container_name: teambi-agent
     restart: unless-stopped
     ports:
