@@ -8,6 +8,13 @@ const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const BASE_URL =
   process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/';
 
+// gemini-2.5-flash는 thinking이 기본 On이라 도구 호출 1라운드가 수 초~십수 초 걸린다.
+// Teams 동기 예산(4.2s)으로는 매번 타임아웃하므로 OpenAI 호환 레이어의 reasoning_effort로 끈다.
+// 2.5 Pro/3 계열은 'none'이 거부되므로 GEMINI_REASONING_EFFORT=low|medium|high로 재정의한다.
+// ||를 쓰는 이유: .env에 'GEMINI_REASONING_EFFORT=' 만 남겨도(주석만 풀고 값 미입력)
+// 빈 문자열이 아니라 기본값이 적용되어 thinking이 조용히 되살아나지 않게 한다.
+const REASONING_EFFORT = process.env.GEMINI_REASONING_EFFORT || 'none';
+
 let client = null;
 const getClient = () =>
   (client ??= new OpenAI({ apiKey: process.env.GEMINI_API_KEY, baseURL: BASE_URL, maxRetries: 0 }));
@@ -31,7 +38,14 @@ export const initMessages = (system, userText) => [
 
 export async function call({ messages, tools, timeout }) {
   const resp = await getClient().chat.completions.create(
-    { model: MODEL, max_tokens: 1024, messages, tools, tool_choice: 'auto' },
+    {
+      model: MODEL,
+      max_tokens: 1024,
+      messages,
+      tools,
+      tool_choice: 'auto',
+      reasoning_effort: REASONING_EFFORT,
+    },
     { timeout },
   );
   const choice = resp.choices[0];
@@ -75,6 +89,7 @@ export async function simpleText({ system, user, maxTokens, timeout }) {
         { role: 'system', content: system },
         { role: 'user', content: user },
       ],
+      reasoning_effort: REASONING_EFFORT,
     },
     { timeout },
   );

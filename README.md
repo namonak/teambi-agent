@@ -169,6 +169,8 @@ LLM_PROVIDER=gemini   # GEMINI_API_KEY 필요 (OpenAI 호환 엔드포인트 경
 | 비용 | 유료 — 팀 사용량 기준 **월 몇백 원** | **무료 티어 있음** (카드 등록 불필요, 예: 15 RPM · 1,000 RPD) |
 | 데이터 | 학습에 사용 안 함 | ⚠️ **무료 티어는 입력·출력이 Google 제품 개선(학습)에 사용될 수 있음** — 가맹점명·금액·팀원 이름이 전송되므로 회사 데이터 정책 확인 후 사용 |
 
+Gemini 2.5 계열은 **thinking(추론)이 기본 On**이라 도구 호출 한 번이 수 초 이상 걸려 Teams 5초 예산을 넘깁니다. 그래서 `reasoning_effort=none`으로 꺼서 호출합니다(`GEMINI_REASONING_EFFORT`로 변경 가능). 추론이 필요한 모델을 쓰려면 이 값을 `low` 이상으로 올리고, 반드시 `TEAMS_INCOMING_WEBHOOK_URL`(비동기 모드, 25초 예산)을 함께 설정하세요.
+
 프로바이더를 바꾸면 컨테이너를 **재생성**해야 적용됩니다: `docker compose down && docker compose up -d`
 
 ## 비용
