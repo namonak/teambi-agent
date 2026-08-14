@@ -1,6 +1,6 @@
 // gemini-request.test.js — Gemini 프로바이더가 "실제로 보내는 요청 본문"을 검증한다.
-// gemini-2.5-flash는 thinking이 기본 On이라 Teams 응답 예산(4.2s)을 넘긴다.
-// OpenAI 호환 레이어의 reasoning_effort로 꺼야 하므로, 그 파라미터가 나가는지 확인한다.
+// thinking은 도구 호출 1라운드를 수 초 이상으로 늘려 Teams 응답 예산(4.2s)을 넘긴다.
+// OpenAI 호환 레이어의 reasoning_effort로 낮춰야 하므로, 그 파라미터가 나가는지 확인한다.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -18,7 +18,7 @@ const server = http.createServer((req, res) => {
         id: 'test',
         object: 'chat.completion',
         created: 0,
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         choices: [{ index: 0, message: { role: 'assistant', content: '커피' }, finish_reason: 'stop' }],
       }),
     );
@@ -38,7 +38,7 @@ before(async () => {
 
 after(() => server.close());
 
-test('call: thinking을 끄는 reasoning_effort를 함께 보낸다', async () => {
+test('call: thinking을 낮추는 reasoning_effort를 함께 보낸다', async () => {
   received.length = 0;
   await gemini.call({
     messages: [{ role: 'user', content: '안녕' }],
@@ -46,7 +46,7 @@ test('call: thinking을 끄는 reasoning_effort를 함께 보낸다', async () =
     timeout: 5000,
   });
   assert.equal(received.length, 1);
-  assert.equal(received[0].body.reasoning_effort, 'none');
+  assert.equal(received[0].body.reasoning_effort, 'minimal');
 });
 
 test('simpleText: 분류 폴백 호출에도 reasoning_effort를 보낸다', async () => {
@@ -58,7 +58,7 @@ test('simpleText: 분류 폴백 호출에도 reasoning_effort를 보낸다', asy
     timeout: 2500,
   });
   assert.equal(received.length, 1);
-  assert.equal(received[0].body.reasoning_effort, 'none');
+  assert.equal(received[0].body.reasoning_effort, 'minimal');
   assert.equal(text, '커피');
 });
 

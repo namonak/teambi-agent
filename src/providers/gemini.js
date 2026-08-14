@@ -10,17 +10,20 @@ const clean = (v) => (v ?? '').trim();
 
 const RAW_MODEL = process.env.GEMINI_MODEL;
 const RAW_BASE = process.env.GEMINI_BASE_URL;
-const MODEL = clean(RAW_MODEL) || 'gemini-2.5-flash';
+// gemini-2.5-flash는 신규 사용자에게 차단됐다("no longer available to new users").
+// 문서와 /models 목록에는 남아 있지만 실제 호출은 404로 거부된다.
+const MODEL = clean(RAW_MODEL) || 'gemini-3.6-flash';
 // GEMINI_BASE_URL은 프록시·테스트용 오버라이드 (기본: Google 공식 OpenAI 호환 엔드포인트)
 const BASE_URL = clean(RAW_BASE) || DEFAULT_BASE_URL;
 
-// gemini-2.5-flash는 thinking이 기본 On이라 도구 호출 1라운드가 수 초~십수 초 걸린다.
-// Teams 동기 예산(4.2s)으로는 매번 타임아웃하므로 OpenAI 호환 레이어의 reasoning_effort로 끈다.
-// 2.5 Pro/3 계열은 'none'이 거부되므로 GEMINI_REASONING_EFFORT=low|medium|high로 재정의한다.
+// thinking은 도구 호출 1라운드를 수 초~십수 초로 늘려 Teams 동기 예산(4.2s)을 넘긴다.
+// Gemini 3 계열은 thinking을 끌 수 없으므로("Reasoning cannot be turned off for
+// Gemini 2.5 Pro or 3 models") 가장 낮은 minimal로 내리는 것이 최선이다.
+// 2.5 계열을 쓴다면 GEMINI_REASONING_EFFORT=none으로 완전히 끌 수 있다.
 // ||를 쓰는 이유: .env에 'GEMINI_REASONING_EFFORT=' 만 남겨도(주석만 풀고 값 미입력)
-// 빈 문자열이 아니라 기본값이 적용되어 thinking이 조용히 되살아나지 않게 한다.
+// 빈 문자열이 아니라 기본값이 적용되어 설정이 조용히 사라지지 않게 한다.
 const RAW_EFFORT = process.env.GEMINI_REASONING_EFFORT;
-const REASONING_EFFORT = clean(RAW_EFFORT) || 'none';
+const REASONING_EFFORT = clean(RAW_EFFORT) || 'minimal';
 
 let client = null;
 const getClient = () =>

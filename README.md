@@ -149,7 +149,7 @@ docker compose up -d --build
 
 | 로그 | 의미 |
 |---|---|
-| `🧠 자연어 처리: gemini · 모델 gemini-2.5-flash` | 정상. 실제 호출할 모델을 확인할 수 있음 |
+| `🧠 자연어 처리: gemini · 모델 gemini-3.6-flash` | 정상. 실제 호출할 모델을 확인할 수 있음 |
 | `⚠️ LLM_PROVIDER 값에 공백/개행이 섞여 있어요` | 편집 중 CR·공백 혼입 (Windows 줄바꿈 등) |
 | `⚠️ LLM_PROVIDER='...' 는 알 수 없는 값` | 오타 — `claude` 또는 `gemini`만 유효 |
 | `⚠️ GEMINI_MODEL 값에 공백/개행이 섞여 있어요` | 모델명 오염 — 방치하면 호출 시 404 |
@@ -202,12 +202,16 @@ LLM_PROVIDER=gemini   # GEMINI_API_KEY 필요 (OpenAI 호환 엔드포인트 경
 
 | | Claude (기본) | Gemini |
 |---|---|---|
-| 모델 | `claude-haiku-4-5` (`ANTHROPIC_MODEL`로 변경) | `gemini-2.5-flash` (`GEMINI_MODEL`로 변경) |
+| 모델 | `claude-haiku-4-5` (`ANTHROPIC_MODEL`로 변경) | `gemini-3.6-flash` (`GEMINI_MODEL`로 변경) |
 | 키 발급 | [console.anthropic.com](https://console.anthropic.com) | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
 | 비용 | 유료 — 팀 사용량 기준 **월 몇백 원** | **무료 티어 있음** (카드 등록 불필요, 예: 15 RPM · 1,000 RPD) |
 | 데이터 | 학습에 사용 안 함 | ⚠️ **무료 티어는 입력·출력이 Google 제품 개선(학습)에 사용될 수 있음** — 가맹점명·금액·팀원 이름이 전송되므로 회사 데이터 정책 확인 후 사용 |
 
-Gemini 2.5 계열은 **thinking(추론)이 기본 On**이라 도구 호출 한 번이 수 초 이상 걸려 Teams 5초 예산을 넘깁니다. 그래서 `reasoning_effort=none`으로 꺼서 호출합니다(`GEMINI_REASONING_EFFORT`로 변경 가능). 추론이 필요한 모델을 쓰려면 이 값을 `low` 이상으로 올리고, 반드시 `TEAMS_INCOMING_WEBHOOK_URL`(비동기 모드, 25초 예산)을 함께 설정하세요.
+Gemini는 **thinking(추론)이 기본 On**이라 도구 호출 한 번이 수 초 이상 걸려 Teams 5초 예산을 넘깁니다. 그래서 `reasoning_effort=minimal`로 낮춰 호출합니다(`GEMINI_REASONING_EFFORT`로 변경 가능).
+
+> ⚠️ **Gemini 3 계열은 thinking을 완전히 끌 수 없습니다**([공식 문서](https://ai.google.dev/gemini-api/docs/openai): *"Reasoning cannot be turned off for Gemini 2.5 Pro or 3 models"*). `minimal`이 최소값입니다. 따라서 5초 동기 모드로는 자연어 처리가 시간을 넘길 수 있으니 **`TEAMS_INCOMING_WEBHOOK_URL`(비동기 모드, 25초 예산) 설정을 강력히 권장**합니다.
+>
+> `gemini-2.5-flash`는 **신규 사용자에게 차단**되어 호출 시 404가 납니다(`/models` 목록에는 여전히 나옵니다). 2.5 계열을 쓸 수 있는 기존 계정이라면 `GEMINI_REASONING_EFFORT=none`으로 thinking을 완전히 끌 수 있습니다.
 
 프로바이더를 바꾸면 컨테이너를 **재생성**해야 적용됩니다: `docker compose down && docker compose up -d`
 

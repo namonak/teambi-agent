@@ -1,7 +1,7 @@
 // gemini-reasoning-env.test.js — GEMINI_REASONING_EFFORT의 각 설정 상태에서
 // 실제로 나가는 요청 본문을 확인한다.
 // 핵심: .env에 'GEMINI_REASONING_EFFORT=' 만 남기는 실수(주석만 풀고 값 미입력)로
-// thinking이 조용히 되살아나 Teams 예산을 넘기는 회귀를 막는다.
+// 설정이 조용히 사라져 Teams 예산을 넘기는 회귀를 막는다.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -42,17 +42,17 @@ async function bodySentWith(envValue, tag) {
   return received[0];
 }
 
-test('미설정이면 thinking을 끈 채로 호출한다', async () => {
+test('미설정이면 thinking을 최소로 낮춰 호출한다', async () => {
   const body = await bodySentWith(undefined, 'unset');
-  assert.equal(body.reasoning_effort, 'none');
+  assert.equal(body.reasoning_effort, 'minimal');
 });
 
-test('빈 값이어도 thinking이 되살아나지 않는다', async () => {
+test('빈 값이어도 기본값이 적용된다', async () => {
   const body = await bodySentWith('', 'empty');
-  assert.equal(body.reasoning_effort, 'none');
+  assert.equal(body.reasoning_effort, 'minimal');
 });
 
-test('명시한 값은 그대로 전달한다 (thinking을 끌 수 없는 2.5 Pro 등 대비)', async () => {
+test('명시한 값은 그대로 전달한다 (2.5 계열의 none 등)', async () => {
   const body = await bodySentWith('low', 'low');
   assert.equal(body.reasoning_effort, 'low');
 });
