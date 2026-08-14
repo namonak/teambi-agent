@@ -10,16 +10,34 @@ import * as gemini from './providers/gemini.js';
 
 const PROVIDERS = { claude, gemini };
 
-// 기본값 claude (기존 동작 유지). 알 수 없는 값이면 claude로 폴백.
-const SELECTED = (process.env.LLM_PROVIDER || 'claude').toLowerCase();
+// .env 값에 공백·CR(\r)이 섞이는 사고가 잦다. 정리해서 인식하되, 정리로 값이
+// 달라졌으면 dirty로 알린다 — 조용히 고치면 같은 실수를 반복하게 된다.
+const REQUESTED = process.env.LLM_PROVIDER ?? '';
+const NORMALIZED = REQUESTED.trim().toLowerCase();
+const SELECTED = NORMALIZED || 'claude'; // 기본값 claude (기존 동작 유지)
+
+const resolve = () => PROVIDERS[SELECTED] ?? claude; // 알 수 없는 값이면 claude로 폴백
 
 export function getProvider() {
-  const p = PROVIDERS[SELECTED] ?? claude;
+  const p = resolve();
   return p.configured() ? p : null;
+}
+
+// 기동 로그·진단용. 무엇이 왜 선택됐는지 그대로 드러낸다.
+export function providerStatus() {
+  const p = resolve();
+  return {
+    requested: REQUESTED, // .env에 적힌 원본
+    name: p.name, // 실제로 선택된 프로바이더
+    known: NORMALIZED === '' || NORMALIZED in PROVIDERS, // 오타/오염 여부
+    dirty: REQUESTED !== NORMALIZED && REQUESTED !== '', // 공백·CR 혼입 여부
+    configured: p.configured(), // 해당 키가 채워져 있는지
+    hint: p.setupHint, // 필요한 환경변수 이름
+  };
 }
 
 // 설정 안내 문구 (자연어 비활성 시 회신에 사용)
 export function setupMessage() {
-  const p = PROVIDERS[SELECTED] ?? claude;
+  const p = resolve();
   return `🤖 자연어 명령은 서버에 ${p.setupHint} 설정(LLM_PROVIDER=${p.name}) 후 사용할 수 있어요.\n카드 승인 문자를 그대로 붙여넣으면 바로 등록됩니다.`;
 }
