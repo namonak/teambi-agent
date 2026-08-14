@@ -21,6 +21,11 @@ const anthropicShape = Object.assign(new Error('400 Bad Request'), {
   status: 400,
   error: { type: 'error', error: { type: 'invalid_request_error', message: 'max_tokens too large' } },
 });
+// Google은 오류를 배열에 담아 보낸다: [{ "error": { "message": ... } }]
+const googleArrayShape = Object.assign(new Error('404 status code (no body)'), {
+  status: 404,
+  error: [{ error: { code: 404, message: 'This model models/gemini-2.5-flash is no longer available to new users' } }],
+});
 // SDK가 이미 본문 메시지를 e.message에 넣어준 경우
 const alreadyInMessage = Object.assign(new Error('400 max_tokens too large'), {
   status: 400,
@@ -40,6 +45,15 @@ test('describeError: 상위 API 오류 본문을 함께 남긴다', () => {
 
 test('describeError: 본문이 한 겹 더 감싸인 형태도 꺼낸다', () => {
   assert.match(describeError(anthropicShape), /max_tokens too large/);
+});
+
+test('describeError: 배열로 감싼 본문에서도 메시지를 꺼낸다', () => {
+  // 이 형태를 못 꺼내 404의 원인("no longer available to new users")을 한동안 놓쳤다
+  assert.match(describeError(googleArrayShape), /no longer available to new users/);
+});
+
+test('배열 본문도 채널 회신에는 노출되지 않는다', () => {
+  assert.doesNotMatch(llmUserMessage(googleArrayShape), /no longer available/);
 });
 
 test('describeError: 이미 message에 있으면 중복해서 붙이지 않는다', () => {

@@ -2,11 +2,17 @@
 // 원칙: 원문 메시지는 채널에 절대 노출하지 않고(내부 정보 유출 방지) 로그에만 남긴다.
 // 이 파일이 없던 시절 nl-agent/tools/webhook이 각자 분기를 들고 있어 문구가 어긋났다.
 
-// 상위 API가 오류 본문에 정답을 담아 보낸다(예: "models/xxx is not found for API
-// version v1beta"). SDK 요약 메시지만 남기면 그 정답이 버려진다.
-// OpenAI SDK는 e.error에 본문의 error 객체를, Anthropic SDK는 본문 전체를 담는다.
-const upstreamMessage = (e) =>
-  e?.error?.message ?? e?.error?.error?.message ?? e?.body?.error?.message ?? null;
+// 상위 API가 오류 본문에 정답을 담아 보낸다(예: "This model ... is no longer available
+// to new users"). SDK 요약 메시지만 남기면 그 정답이 버려진다.
+// 본문 모양이 제각각이라 세 가지를 모두 훑는다:
+//   {message}                      — OpenAI 호환
+//   {error:{message}}              — 한 겹 감싼 형태
+//   [{error:{message}}]            — Google이 실제로 보내는 형태(배열)
+const pick = (o) => o?.message ?? o?.error?.message ?? null;
+const upstreamMessage = (e) => {
+  const body = e?.error ?? e?.body;
+  return pick(Array.isArray(body) ? body[0] : body);
+};
 
 // 로그용 — 상태 코드가 있으면 앞에 붙이고 원문을 그대로 남긴다.
 // 여기서 나온 문자열은 로그 전용이다. 채널 회신에는 아래 두 함수만 쓴다.
