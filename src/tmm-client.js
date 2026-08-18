@@ -57,7 +57,7 @@ async function api(method, path, body, retry = true) {
 // --- 조회 ---
 export const getCategories = (period) => api('GET', `/api/periods/${period}/categories`); // {categories:[{id,name,amount}]}
 export const getMembers = () => api('GET', '/api/members');
-export const getDashboard = (period) => api('GET', `/api/dashboard?period=${encodeURIComponent(period)}`); // {categories:[{id,name,allocated,used,remaining}],...}
+export const getDashboard = (period) => api('GET', `/api/dashboard?period=${encodeURIComponent(period)}`); // {categories:[{id,name,allocated,used,remaining}], members:[{member_id,name,allocation,used,remaining}],...}
 export const listTransactions = (params = {}) =>
   api('GET', `/api/transactions?${new URLSearchParams(params)}`); // {period, transactions:[...]}
 

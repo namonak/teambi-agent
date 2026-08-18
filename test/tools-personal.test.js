@@ -26,6 +26,19 @@ const server_ = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ ok: true, transaction: { id: 7, ...lastCreateBody } }));
     }
+    if (req.url.startsWith('/api/dashboard')) {
+      // 실제 서버와 동일하게 members는 member_id 키 + 금액 필드를 갖는다.
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(
+        JSON.stringify({
+          categories: [{ id: 1, name: '커피', allocated: 10000, used: 0, remaining: 10000 }],
+          members: [
+            { member_id: 11, name: '홍길동', allocation: 180000, used: 52000, remaining: 128000, ratio: 0.288 },
+            { member_id: 12, name: '김철수', allocation: 180000, used: 0, remaining: 180000, ratio: 0 },
+          ],
+        }),
+      );
+    }
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(
       JSON.stringify({

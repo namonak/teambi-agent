@@ -11,12 +11,21 @@ import { todayStr, fmtWon } from './util.js';
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const MAX_ROUNDS = 3;
 
-function buildSystem(toolkit) {
+// export하는 이유는 budgetSummary와 같다 — 프롬프트에 실제로 무엇이 실렸는지
+// (특히 팀원별 개인 잔액) 테스트에서 직접 확인하기 위해서다.
+export function buildSystem(toolkit) {
   const now = new Date();
   const catLines = toolkit.categories
     .map((c) => `- ${c.name}(id ${c.id}): 잔액 ${fmtWon(c.remaining)} / ${fmtWon(c.allocated)}`)
     .join('\n');
-  const memberLine = toolkit.members.map((m) => `${m.name}(id ${m.id})`).join(', ');
+  // 개인 잔액(remaining)은 당월 dashboard에서만 병합된다. 없으면 이름만 적는다.
+  const memberLines = toolkit.members
+    .map((m) =>
+      m.remaining == null
+        ? `- ${m.name}(id ${m.id})`
+        : `- ${m.name}(id ${m.id}): 잔액 ${fmtWon(m.remaining)} / ${fmtWon(m.allocation)}`,
+    )
+    .join('\n');
   return `당신은 팀비 관리 봇 "장부장"이다. Teams 채널 메시지를 해석해 teamMoneyManager에 지출을 기입/수정/삭제한다.
 
 오늘: ${todayStr(now)} (${WEEKDAYS[now.getDay()]}) / 당월: ${toolkit.period}
@@ -24,10 +33,11 @@ function buildSystem(toolkit) {
 당월 공용 카테고리(잔액):
 ${catLines || '- (없음)'}
 
-활성 팀원: ${memberLine || '(없음)'}
+활성 팀원(개인 잔액):
+${memberLines || '- (없음)'}
 
 규칙:
-- 위에 적은 카테고리 잔액과 팀원 목록은 이번 요청 시점의 최신 값이다. 잔액·팀원 질문은 도구 없이 이 값으로 바로 답한다.
+- 위에 적은 공용 카테고리 잔액과 팀원별 개인 잔액은 이번 요청 시점의 최신 값이다. 잔액·팀원 질문은 공용·개인 모두 도구 없이 이 값으로 바로 답한다.
 - list_categories는 기입/수정/삭제를 실행한 직후 갱신된 잔액을 확인할 때만 호출한다. 그 외에는 절대 부르지 마라.
 - 조회 질문(내역 확인 등)은 필요한 도구를 첫 응답에서 병렬로 모두 호출하고, 결과를 받으면 추가 조회 없이 바로 최종 답변을 작성한다. 도구를 한 번에 하나씩 나눠 부르면 시간 안에 끝나지 않는다.
 - 이 앱은 당월 지출만 기입/수정 가능하다. 지난달 요청이면 기입하지 말고 이유를 설명한다.

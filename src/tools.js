@@ -91,7 +91,16 @@ export async function createToolkit() {
   const [dashboard, membersRes] = await Promise.all([tmm.getDashboard(period), tmm.getMembers()]);
   const categories = dashboard.categories ?? [];
   const allMembers = membersRes.members ?? membersRes ?? [];
-  const members = allMembers.filter((m) => m.active !== 0);
+
+  // 개인 잔액은 dashboard.members에만 있다. 키가 member_id로, /api/members의 id와 다름에 주의.
+  // resolveByName·summarize가 .id에 의존하므로 기존 배열 형태는 그대로 두고 금액만 얹는다.
+  const balanceById = new Map((dashboard.members ?? []).map((m) => [m.member_id, m]));
+  const members = allMembers
+    .filter((m) => m.active !== 0)
+    .map((m) => {
+      const b = balanceById.get(m.id);
+      return b ? { ...m, allocation: b.allocation, used: b.used, remaining: b.remaining } : m;
+    });
   const sideEffects = []; // {action, id, summary}
 
   async function findTx(id) {
