@@ -155,6 +155,15 @@ export async function createToolkit() {
     return body;
   }
 
+  // 도구 결과에서 모델이 쓸 수 없는 내부 id를 걷어낸다.
+  // 팀원·카테고리는 이름으로만 지정하므로(member_name/category_name) 이 id들은 정보량이 0인데,
+  // 모델이 회신에 그대로 옮겨 적어 "최정 님(id 2)이십니다" 같은 문구가 채널에 노출됐다.
+  // 지출 id는 남긴다 — 사용자가 "#7 삭제해줘"로 직접 부르는 번호이고 수정/삭제 도구의 입력이다.
+  const omitInternalIds = ({ keepId }) => (row) => {
+    const { member_id, period_category_id, id, ...rest } = row;
+    return keepId ? { id, ...rest } : rest;
+  };
+
   const summarize = (tx) =>
     `#${tx.id} ${tx.date} ${fmtWon(tx.amount)} ${tx.kind === 'common' ? (tx.category_name ?? '공용') : `개인(${tx.member_name ?? ''})`} ${cardLabel(tx.card)}${tx.memo ? ` · ${tx.memo}` : ''}`;
 
@@ -163,14 +172,14 @@ export async function createToolkit() {
       switch (name) {
         case 'list_categories': {
           const d = await tmm.getDashboard(period);
-          return { content: JSON.stringify(d.categories ?? [], null, 0), is_error: false };
+          return { content: JSON.stringify((d.categories ?? []).map(omitInternalIds({ keepId: false })), null, 0), is_error: false };
         }
         case 'list_recent_transactions': {
           const params = { period };
           if (input.kind) params.kind = input.kind;
           const { transactions } = await tmm.listTransactions(params);
           const limit = Math.min(input.limit ?? 10, 20);
-          return { content: JSON.stringify(transactions.slice(0, limit)), is_error: false };
+          return { content: JSON.stringify(transactions.slice(0, limit).map(omitInternalIds({ keepId: true }))), is_error: false };
         }
         case 'create_transaction': {
           const body = buildBody(input);

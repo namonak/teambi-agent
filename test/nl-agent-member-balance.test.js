@@ -88,7 +88,7 @@ test('dashboard.members가 비어도 예외 없이 이름만으로 렌더된다'
     const tk = await createToolkit();
     const sys = buildSystem(tk);
     const line = sys.split('\n').find((l) => l.includes('홍길동'));
-    assert.equal(line, '- 홍길동(id 11)', '금액이 없으면 이름만 (undefined원 금지)');
+    assert.equal(line, '- 홍길동', '금액이 없으면 이름만 (undefined원 금지)');
     assert.doesNotMatch(sys, /NaN|undefined/);
   } finally {
     dashboardMembers = saved;

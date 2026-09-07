@@ -14,10 +14,12 @@ const MAX_ROUNDS = 3;
 
 // 발화자(Teams from.name) → 프롬프트에 실을 한 줄.
 // 목록에 없는 사람은 이름을 지어내지 말고 "없음"을 명시해야 1인칭 지출을 되묻게 된다.
-export function speakerLineFor(toolkit, speaker) {
+// withId는 운영 로그 전용이다 — 로그는 어느 로스터 행에 붙었는지 확인해야 하므로 id가 필요하지만,
+// 같은 문자열을 프롬프트에 실었더니 모델이 그대로 베껴 채널에 "○○ 님(id 2)이십니다"라고 답했다.
+export function speakerLineFor(toolkit, speaker, { withId = false } = {}) {
   if (!speaker) return '(알 수 없음)';
   const found = matchMembers(toolkit.members, speaker, toolkit.aliases);
-  if (found.length === 1) return `${found[0].name}(id ${found[0].id})`;
+  if (found.length === 1) return withId ? `${found[0].name}(id ${found[0].id})` : found[0].name;
   // 후보가 여럿인데 "목록에 없음"이라고 적으면 거짓말이다(성만 같은 동명 팀원 등).
   // 모델이 "없는 사람"으로 단정해 되묻기를 건너뛰지 않도록 모호함을 그대로 알린다.
   if (found.length > 1) return `${speaker} (팀원 여러 명과 일치 — 누구인지 확인 필요)`;
@@ -28,8 +30,11 @@ export function speakerLineFor(toolkit, speaker) {
 // (특히 팀원별 개인 잔액·발화자) 테스트에서 직접 확인하기 위해서다.
 export function buildSystem(toolkit, opts = {}) {
   const now = new Date();
+  // 팀원·카테고리의 내부 id는 프롬프트에 싣지 않는다. 어떤 도구도 이 id를 인자로 받지 않고
+  // (create/update_transaction은 member_name·category_name을 서버에서 이름으로 해석한다),
+  // 이름 옆에 붙여 두니 모델이 그대로 베껴 채널 회신에 "○○ 님(id 2)"처럼 노출했다.
   const catLines = toolkit.categories
-    .map((c) => `- ${c.name}(id ${c.id}): 잔액 ${fmtWon(c.remaining)} / ${fmtWon(c.allocated)}`)
+    .map((c) => `- ${c.name}: 잔액 ${fmtWon(c.remaining)} / ${fmtWon(c.allocated)}`)
     .join('\n');
   // 개인 잔액(remaining)은 당월 dashboard에서만 병합된다. 없으면 이름만 적는다.
   // 별칭은 .env에 적힌 원문("실장님")을 그대로 보여 준다 — 내부 해석 키("실장")가 아니라.
@@ -37,8 +42,8 @@ export function buildSystem(toolkit, opts = {}) {
     .map((m) => {
       const base =
         m.remaining == null
-          ? `- ${m.name}(id ${m.id})`
-          : `- ${m.name}(id ${m.id}): 잔액 ${fmtWon(m.remaining)} / ${fmtWon(m.allocation)}`;
+          ? `- ${m.name}`
+          : `- ${m.name}: 잔액 ${fmtWon(m.remaining)} / ${fmtWon(m.allocation)}`;
       const labels = toolkit.aliasesOf?.(m.name) ?? [];
       return labels.length > 0 ? `${base} [호칭: ${labels.join(', ')}]` : base;
     })
@@ -69,6 +74,7 @@ ${memberLines || '- (없음)'}
 - 발화자가 팀원 목록에 없거나 특정되지 않으면 1인칭 지출은 기입하지 말고 누구의 지출인지 되묻는다. 다른 팀원 이름으로 추측해 기입하지 마라.
 - member_name에는 직책·호칭(실장님, 팀장님, ~님)을 빼고 팀원 목록의 이름 그대로 넣는다.
 - [호칭]이 적힌 팀원은 그 호칭("실장님", "팀장님")으로 불려도 같은 사람이다. 호칭으로 물으면 목록의 이름과 잔액으로 답하고, 답변에서는 "홍길동 실장님"처럼 이름과 호칭을 함께 쓴다. 호칭이 어느 팀원인지 목록에 없으면 추측하지 말고 누구인지 되묻는다.
+- 팀원·카테고리의 내부 id는 회신에 절대 쓰지 마라. 사람에게 보여도 되는 번호는 지출 번호(#7)뿐이다.
 - 최종 답변은 채널에 그대로 표시된다. 2~4줄의 간결한 한국어로, 처리 결과(금액·카테고리·날짜)를 요약한다. 이모지 하나 정도는 좋다.`;
 }
 
@@ -110,7 +116,7 @@ export async function runNlAgent(text, deadline, opts = {}) {
 
   // Teams from.name의 실제 형식이 환경마다 달라(영문 표시명·부서 접미 등) 해석 결과를
   // 요청당 1줄 남긴다. 본문·금액은 담지 않는다.
-  console.info('[nl-agent] 발화자 해석: %s', speakerLineFor(toolkit, opts.speaker));
+  console.info('[nl-agent] 발화자 해석: %s', speakerLineFor(toolkit, opts.speaker, { withId: true }));
 
   const system = buildSystem(toolkit, { speaker: opts.speaker });
   const tools = gemini.toTools(toolkit.tools);

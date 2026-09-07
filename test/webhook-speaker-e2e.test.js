@@ -155,9 +155,9 @@ test('동기 경로: from.name이 모델이 받는 시스템 프롬프트의 발
   assert.equal(res.statusCode, 200);
   assert.equal(res.payload.text, '✅ 확인했어요.', '모델 응답이 그대로 회신돼야 진짜 경로를 탄 것이다');
   assert.equal(systemPrompts.length, 1, '가짜 Gemini가 실제로 호출돼야 한다');
-  assert.equal(speakerLine(lastSystem()), '발화자(이 메시지를 보낸 사람): 홍길동(id 11)');
+  assert.equal(speakerLine(lastSystem()), '발화자(이 메시지를 보낸 사람): 홍길동');
   assert.ok(
-    lastSystem().includes('발화자(이 메시지를 보낸 사람): 홍길동(id 11)'),
+    lastSystem().includes('발화자(이 메시지를 보낸 사람): 홍길동'),
     'webhook → runNlAgent → buildSystem 중 하나라도 speaker를 흘리면 여기서 깨진다',
   );
 });
@@ -170,7 +170,7 @@ test('동기 경로: 표시명 형식이 달라도 같은 팀원으로 실린다
     text: '커피 4,500원 기입해줘',
     from: { id: 'u2', name: '김철수 (Cheolsu Kim)' },
   });
-  assert.equal(speakerLine(lastSystem()), '발화자(이 메시지를 보낸 사람): 김철수(id 12)');
+  assert.equal(speakerLine(lastSystem()), '발화자(이 메시지를 보낸 사람): 김철수');
 });
 
 test('동기 경로: from.name이 없으면 (알 수 없음)으로 실린다 — 이름을 지어내지 않는다', async () => {
@@ -203,6 +203,6 @@ test('비동기 경로: 사후 게시 모드에서도 발화자가 프롬프트�
   }
 
   assert.equal(systemPrompts.length, 1);
-  assert.equal(speakerLine(lastSystem()), '발화자(이 메시지를 보낸 사람): 홍길동(id 11)');
+  assert.equal(speakerLine(lastSystem()), '발화자(이 메시지를 보낸 사람): 홍길동');
   assert.match(postedText, /확인했어요/, '결과가 채널에 게시된다');
 });

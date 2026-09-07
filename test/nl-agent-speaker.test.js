@@ -61,12 +61,12 @@ after(() => server.close());
 
 const speakerLine = (sys) => sys.split('\n').find((l) => l.startsWith('발화자'));
 
-test('발화자를 팀원으로 해석해 프롬프트에 이름과 id를 싣는다', async () => {
+test('발화자를 팀원으로 해석해 프롬프트에 이름을 싣는다 (내부 id 없이)', async () => {
   const tk = await createToolkit();
   // Teams 표시명은 환경마다 형식이 다르다 — 어느 형식이든 같은 사람으로 붙어야 한다.
   for (const from of ['홍길동', '홍길동 (Gildong Hong)', '홍길동/BI팀', '홍길동 실장님']) {
     const sys = buildSystem(tk, { speaker: from });
-    assert.equal(speakerLine(sys), '발화자(이 메시지를 보낸 사람): 홍길동(id 11)', from);
+    assert.equal(speakerLine(sys), '발화자(이 메시지를 보낸 사람): 홍길동', from);
   }
 });
 
@@ -89,7 +89,7 @@ test('발화자가 여러 팀원과 일치하면 "없음"이 아니라 모호함
     );
     assert.ok(!sys.includes(`${from} (팀원 목록에 없음)`), '목록에 있는 사람을 없다고 하면 안 된다');
   }
-  assert.equal(speakerLineFor(tk, '박정민'), '박정민(id 13)', '전체 이름이면 그대로 특정된다');
+  assert.equal(speakerLineFor(tk, '박정민'), '박정민', '전체 이름이면 그대로 특정된다');
 });
 
 test('발화자 정보가 없으면 (알 수 없음) — undefined/NaN이 새어 나가지 않는다', async () => {
@@ -104,7 +104,7 @@ test('speakerLineFor: 별칭으로 불린 발화자도 해석한다', async () =
   process.env.TEAMS_MEMBER_ALIASES = '홍길동=홍실장,실장님';
   try {
     const tk = await createToolkit();
-    assert.equal(speakerLineFor(tk, '실장님'), '홍길동(id 11)');
+    assert.equal(speakerLineFor(tk, '실장님'), '홍길동');
     assert.equal(speakerLineFor(tk, null), '(알 수 없음)');
   } finally {
     delete process.env.TEAMS_MEMBER_ALIASES;
@@ -136,10 +136,10 @@ test('별칭이 있으면 팀원 줄에 원문 호칭이 붙는다 (내부 키�
   try {
     const tk = await createToolkit();
     const sys = buildSystem(tk, { speaker: '홍길동' });
-    const line = sys.split('\n').find((l) => l.includes('홍길동(id 11)'));
-    assert.equal(line, '- 홍길동(id 11): 잔액 128,000원 / 180,000원 [호칭: 실장님, 홍실장]');
-    const other = sys.split('\n').find((l) => l.includes('김철수'));
-    assert.equal(other, '- 김철수(id 12): 잔액 180,000원 / 180,000원', '별칭 없는 팀원은 그대로');
+    const line = sys.split('\n').find((l) => l.startsWith('- 홍길동'));
+    assert.equal(line, '- 홍길동: 잔액 128,000원 / 180,000원 [호칭: 실장님, 홍실장]');
+    const other = sys.split('\n').find((l) => l.startsWith('- 김철수'));
+    assert.equal(other, '- 김철수: 잔액 180,000원 / 180,000원', '별칭 없는 팀원은 그대로');
   } finally {
     delete process.env.TEAMS_MEMBER_ALIASES;
   }
