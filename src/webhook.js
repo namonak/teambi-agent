@@ -124,17 +124,33 @@ async function handleSmsCancel(parsed, cardMap) {
   return `⚠️ 승인취소 대상 후보가 ${candidates.length}건이라 자동 삭제하지 않았어요:\n${list}\n"#id 삭제해줘"라고 말하거나 웹에서 처리해 주세요.`;
 }
 
+// Teams activity의 발화자 표시명. 형식은 테넌트마다 다르므로(영문 표시명·부서 접미 등)
+// 여기서는 형태만 다듬어 넘기고, 팀원 해석은 nl-agent(matchMembers)에 맡긴다.
+// 이 값은 시스템 프롬프트에 그대로 실리므로 줄바꿈을 공백으로 눕히고 길이를 자른다 —
+// 표시명에 개행이 들어오면 가짜 규칙 줄을 프롬프트에 끼워 넣을 수 있다.
+const SPEAKER_MAX = 64;
+export function speakerFromActivity(activity) {
+  const name = activity?.from?.name;
+  if (typeof name !== 'string') return null;
+  const flat = name.replace(/\s+/g, ' ').trim();
+  // 자르기는 코드포인트 단위로 한다 — slice는 UTF-16 코드 유닛을 자르므로 이모지가 섞인
+  // 표시명에서 짝 잃은 서로게이트가 남고, 그 문자열이 실린 프롬프트를 400으로 거절하는
+  // 게이트웨이가 있다(원인 파악이 어려운 실패다).
+  const cut = [...flat].slice(0, SPEAKER_MAX).join('');
+  return cut || null;
+}
+
 // --- 자연어 비동기 처리 (즉시 접수 응답 → 완료 후 Workflows 웹후크로 게시) ----
-async function processNlAsync(text, requester) {
+async function processNlAsync(text, speaker) {
   let result;
   try {
-    result = await runNlAgent(text, Date.now() + ASYNC_DEADLINE_MS, { maxRounds: ASYNC_MAX_ROUNDS });
+    result = await runNlAgent(text, Date.now() + ASYNC_DEADLINE_MS, { maxRounds: ASYNC_MAX_ROUNDS, speaker });
   } catch (e) {
     console.error('[webhook] 비동기 처리 오류:', e);
     result = '😵 처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
   }
   const quoted = text.replace(/\s+/g, ' ').slice(0, 40);
-  const head = `📣 ${requester ? `${requester}님 ` : ''}요청 결과 — 「${quoted}${text.length > 40 ? '…' : ''}」`;
+  const head = `📣 ${speaker ? `${speaker}님 ` : ''}요청 결과 — 「${quoted}${text.length > 40 ? '…' : ''}」`;
   try {
     await postToChannel(`${head}\n${result}`);
   } catch (e) {
@@ -168,6 +184,7 @@ export function createWebhookHandler() {
 
     const deadline = Date.now() + DEADLINE_MS;
     const text = extractUserText(activity);
+    const speaker = speakerFromActivity(activity); // "제가"가 누구인지의 유일한 근거
     let reply;
 
     try {
@@ -183,16 +200,19 @@ export function createWebhookHandler() {
         } else {
           reply = await handleSmsApproval(parsed, cardMap);
         }
-      } else if (notifyEnabled()) {
-        // 비동기 모드: 5초 제한을 피해 즉시 접수 응답, 결과는 채널에 사후 게시.
-        // 처리 지속을 위해 응답을 먼저 보내고 백그라운드로 이어간다.
-        reply = '⏳ 접수했어요! 처리가 끝나면 결과를 채널에 올릴게요.';
-        dedupeSet(id, { state: 'done', reply });
-        res.json(msg(reply));
-        processNlAsync(text, activity.from?.name).catch((e) => console.error('[webhook] 비동기 처리 미처리 예외:', e));
-        return;
       } else {
-        reply = await runNlAgent(text, deadline);
+        // Teams from.name의 실제 형식을 실서버 로그로 확정하기 위한 1줄(본문·금액은 남기지 않는다).
+        console.info('[webhook] 발화자 from.name=%j', speaker);
+        if (notifyEnabled()) {
+          // 비동기 모드: 5초 제한을 피해 즉시 접수 응답, 결과는 채널에 사후 게시.
+          // 처리 지속을 위해 응답을 먼저 보내고 백그라운드로 이어간다.
+          reply = '⏳ 접수했어요! 처리가 끝나면 결과를 채널에 올릴게요.';
+          dedupeSet(id, { state: 'done', reply });
+          res.json(msg(reply));
+          processNlAsync(text, speaker).catch((e) => console.error('[webhook] 비동기 처리 미처리 예외:', e));
+          return;
+        }
+        reply = await runNlAgent(text, deadline, { speaker });
       }
     } catch (e) {
       console.error('[webhook] 처리 오류:', describeError(e));
