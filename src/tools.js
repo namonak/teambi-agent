@@ -3,7 +3,8 @@
 // 타임아웃 시에도 "지금까지 처리된 것"을 정직하게 회신할 수 있게 한다.
 import * as tmm from './tmm-client.js';
 import { serviceUserMessage } from './errors.js';
-import { currentPeriod, todayStr, fmtWon, cardLabel } from './util.js';
+import { currentPeriod, todayStr, fmtWon, cardLabel, parseMemberAliases } from './util.js';
+import { matchMembers } from './names.js';
 
 const TOOL_DEFS = [
   {
@@ -37,7 +38,7 @@ const TOOL_DEFS = [
         amount: { type: 'integer', description: '금액(원), 양의 정수' },
         kind: { type: 'string', enum: ['common', 'personal'] },
         category_name: { type: 'string', description: '공용 카테고리 이름 (예: 커피, 회식)' },
-        member_name: { type: 'string', description: '개인 지출 대상 팀원 이름' },
+        member_name: { type: 'string', description: '개인 지출 대상 팀원 이름. 직책·호칭(실장님, 팀장님, 님)은 빼고 팀원 목록의 이름 그대로.' },
         card: { type: 'integer', enum: [1, 2], description: '사용 카드 (모르면 생략)' },
         memo: { type: 'string', description: '메모 (가맹점명 등)' },
       },
@@ -56,7 +57,7 @@ const TOOL_DEFS = [
         amount: { type: 'integer' },
         kind: { type: 'string', enum: ['common', 'personal'] },
         category_name: { type: 'string' },
-        member_name: { type: 'string' },
+        member_name: { type: 'string', description: '개인 지출 대상 팀원 이름. 직책·호칭(실장님, 팀장님, 님)은 빼고 팀원 목록의 이름 그대로.' },
         card: { type: 'integer', enum: [1, 2] },
         memo: { type: 'string' },
       },
@@ -76,13 +77,19 @@ const TOOL_DEFS = [
   },
 ];
 
-// 이름 → id 해석 (정확 일치 → 부분 일치, 모호하면 에러)
-function resolveByName(list, name, label) {
+// 기본 매처 — 정확 일치 → 양방향 부분 일치. 카테고리 이름은 계속 이 규칙을 쓴다.
+const substringMatch = (list, name) => {
   const exact = list.filter((x) => x.name === name);
-  const partial = exact.length > 0 ? exact : list.filter((x) => x.name.includes(name) || name.includes(x.name));
-  if (partial.length === 1) return partial[0];
-  if (partial.length === 0) throw new Error(`${label} '${name}'을(를) 찾을 수 없음. 후보: ${list.map((x) => x.name).join(', ')}`);
-  throw new Error(`${label} '${name}'이(가) 모호함. 후보: ${partial.map((x) => x.name).join(', ')}`);
+  return exact.length > 0 ? exact : list.filter((x) => x.name.includes(name) || name.includes(x.name));
+};
+
+// 이름 → id 해석 (매처가 고른 후보가 정확히 1건일 때만 성공, 모호하면 에러)
+// 팀원은 호칭·별칭까지 봐야 해서 matchMembers를 주입한다(아래 resolveMember).
+function resolveByName(list, name, label, matches = substringMatch) {
+  const found = matches(list, name);
+  if (found.length === 1) return found[0];
+  if (found.length === 0) throw new Error(`${label} '${name}'을(를) 찾을 수 없음. 후보: ${list.map((x) => x.name).join(', ')}`);
+  throw new Error(`${label} '${name}'이(가) 모호함. 후보: ${found.map((x) => x.name).join(', ')}`);
 }
 
 export async function createToolkit() {
@@ -101,6 +108,19 @@ export async function createToolkit() {
       const b = balanceById.get(m.id);
       return b ? { ...m, allocation: b.allocation, used: b.used, remaining: b.remaining } : m;
     });
+  // 서버에는 직책·별칭 필드가 없다(스키마: id,name,birthday,active). 호칭 해석은 .env로만 받는다.
+  // 매 호출마다 읽는 이유: 컨테이너 재생성 없이 값이 바뀌어도 다음 요청에 반영되게.
+  const { byKey: aliases, labelsOf } = parseMemberAliases(process.env.TEAMS_MEMBER_ALIASES);
+  // 별칭 대상이 활성 명단에 없으면(오타 '홍길동 실장=홍실장', 퇴사 등) 그 별칭은 영영
+  // 해석되지 않는데 겉으로는 아무 일도 일어나지 않는다. 운영자가 알아챌 유일한 신호로
+  // 한 줄만 남긴다 — 이름 외에 금액·본문은 담지 않는다.
+  const activeNames = new Set(members.map((m) => m.name));
+  const strayAliasTargets = [...labelsOf.keys()].filter((n) => !activeNames.has(n));
+  if (strayAliasTargets.length > 0) {
+    console.warn('[tools] TEAMS_MEMBER_ALIASES 대상이 활성 팀원에 없어 무시됩니다: %s', strayAliasTargets.join(', '));
+  }
+  const aliasesOf = (name) => labelsOf.get(name) ?? [];
+  const resolveMember = (name) => resolveByName(members, name, '팀원', (list, ref) => matchMembers(list, ref, aliases));
   const sideEffects = []; // {action, id, summary}
 
   async function findTx(id) {
@@ -127,7 +147,7 @@ export async function createToolkit() {
     }
     if (input.member_name) {
       body.kind = input.kind ?? 'personal';
-      body.member_id = resolveByName(members, input.member_name, '팀원').id;
+      body.member_id = resolveMember(input.member_name).id;
       body.period_category_id = null;
     }
     if (body.kind === 'common') body.member_id = null;
@@ -186,5 +206,5 @@ export async function createToolkit() {
     }
   }
 
-  return { tools: TOOL_DEFS, run, sideEffects, categories, members, period };
+  return { tools: TOOL_DEFS, run, sideEffects, categories, members, period, aliases, aliasesOf };
 }
