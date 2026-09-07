@@ -32,6 +32,10 @@ Teams 채널 ── @장부장 멘션 ──▶ teambi-agent ── REST API ─
 > @장부장 아까 그 커피 1,600원짜리 2,000원으로 수정해줘
 > @장부장 이번 달 커피 얼마 남았어?
 > @장부장 홍길동 개인 잔액 얼마야?
+> @장부장 제가 커피 4,500원 썼어요
+> @장부장 실장님 점심 12,000원
+
+**"제가"는 메시지를 보낸 본인**으로 처리합니다(Teams가 보내는 `from.name`을 팀원 목록과 대조). 발화자가 팀원 목록에 없으면 추측해서 기입하지 않고 누구의 지출인지 되묻습니다. **직책·호칭**은 "홍길동 실장님"처럼 이름이 함께 있으면 그대로 해석하고, "실장님"처럼 직책만 부르는 말을 쓰려면 `.env`의 `TEAMS_MEMBER_ALIASES`에 매핑을 적어야 합니다(회원 정보에 직책 필드가 없기 때문).
 
 **승인취소 문자**를 붙여넣으면 일치하는 지출 1건을 찾아 자동 삭제합니다(후보가 여럿이면 자동 삭제하지 않고 후보를 보여줍니다).
 
@@ -57,6 +61,7 @@ cp .env.example .env
 #   TMM_BASE_URL      teamMoneyManager 주소 (같은 서버면 http://localhost:49876)
 #   TMM_PASSWORD      teamMoneyManager 로그인 비밀번호
 #   TEAMS_CARD_MAP    카드 문자 식별번호 → 카드슬롯 매핑 (예: 3900:1,2903:2)
+#   TEAMS_MEMBER_ALIASES  (선택) 호칭 → 팀원 이름 (예: 홍길동=홍실장,실장님;김철수=김팀장,팀장님)
 #   GEMINI_API_KEY    (선택) 자연어 처리용 — aistudio.google.com/apikey에서 발급
 #   TEAMS_WEBHOOK_SECRET  아래 3단계에서 발급받아 입력
 ```
@@ -157,6 +162,7 @@ docker compose up -d --build
 | `[webhook] HMAC 검증 실패: 서명 불일치 ...` | `TEAMS_WEBHOOK_SECRET`이 Teams의 것과 다름 |
 | `[webhook] HMAC 검증 실패: Authorization 헤더 없음 ...` | 리버스 프록시가 헤더를 떨구고 있음 |
 | `[webhook] HMAC 검증 실패: 요청 본문을 읽지 못함 ...` | Content-Type이 `application/json`이 아님 |
+| `[webhook] 발화자 from.name="홍길동"` · `[nl-agent] 발화자 해석: 홍길동(id 11)` | 자연어 요청의 발화자 인식 결과. `(팀원 목록에 없음)`이면 `TEAMS_MEMBER_ALIASES`에 표시명을 추가 |
 
 ## 제약 사항 (Teams Outgoing Webhook)
 
@@ -185,6 +191,7 @@ src/
 ├── version.js     # 빌드 식별 정보 (기동 로그 · /health)
 ├── teams-notify.js# Workflows 웹후크 사후 게시 (Adaptive Card)
 ├── tools.js       # LLM 도구 5종
+├── names.js       # 팀원 이름 참조 정규화·매칭 (직책/호칭/별칭)
 ├── tmm-client.js  # teamMoneyManager REST 클라이언트
 └── util.js        # 날짜/금액/설정 유틸
 ```
