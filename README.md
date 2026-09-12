@@ -88,7 +88,7 @@ npm run dev
 
 > **공개 주소**: Teams가 이 서버로 직접 POST하므로 `/webhook`이 HTTPS로 인터넷에서 접근 가능해야 합니다.
 >
-> **장부장은 teamMoneyManager와 같은 서버에 둘 필요가 없습니다.** 인바운드(Teams → 장부장)만 본인이 통제하는 HTTPS 주소면 되고, 아웃바운드(장부장 → teamMoneyManager)는 `TMM_BASE_URL`로 공개 주소를 호출할 뿐입니다. 따라서 **본인 소유 도메인**(예: `bot.joannes.kr`)에 장부장만 올리고, `.env`에서 `TMM_BASE_URL=https://<teamMoneyManager 공개주소>` 로 가리키면 됩니다.
+> **장부장은 teamMoneyManager와 같은 서버에 둘 필요가 없습니다.** 인바운드(Teams → 장부장)만 본인이 통제하는 HTTPS 주소면 되고, 아웃바운드(장부장 → teamMoneyManager)는 `TMM_BASE_URL`로 공개 주소를 호출할 뿐입니다. 따라서 **본인 소유 도메인**(예: `bot.namonak.dev`)에 장부장만 올리고, `.env`에서 `TMM_BASE_URL=https://<teamMoneyManager 공개주소>` 로 가리키면 됩니다.
 >
 공개 HTTPS 주소를 붙이는 방법은 환경에 따라 둘 중 하나:
 
@@ -98,11 +98,11 @@ npm run dev
   ```bash
   docker compose up -d --build
   ```
-- 리버스 프록시에서 `bot.joannes.kr` → `localhost:49877` 로 전달.
+- 리버스 프록시에서 `bot.namonak.dev` → `localhost:49877` 로 전달.
   - **Synology DSM**: 제어판 → 로그인 포털 → 고급 → 리버스 프록시 → 생성
-    - 소스: HTTPS / `bot.joannes.kr` / 443
+    - 소스: HTTPS / `bot.namonak.dev` / 443
     - 대상: HTTP / `localhost` / 49877
-    - (`bot.joannes.kr` 인증서가 이미 있으면 그대로 물린다. `Authorization` 헤더는 그대로 전달되어 HMAC 검증 정상 동작.)
+    - (`bot.namonak.dev` 인증서가 이미 있으면 그대로 물린다. `Authorization` 헤더는 그대로 전달되어 HMAC 검증 정상 동작.)
 
 **B) 프록시가 없는 빈 서버** — [`deploy/`](deploy/)의 Caddy 예시로 자동 HTTPS까지 한 번에:
 ```bash
@@ -111,7 +111,7 @@ docker compose -f docker-compose.yml -f deploy/docker-compose.caddy.yml up -d --
 ```
 Caddy가 Let's Encrypt 인증서를 자동 발급한다. (80/443 포트가 비어 있어야 함.)
 
-어느 쪽이든 Teams 웹훅 콜백 URL은 `https://bot.joannes.kr/webhook`.
+어느 쪽이든 Teams 웹훅 콜백 URL은 `https://bot.namonak.dev/webhook`.
 
 ### 4. (선택·권장) 자연어 비동기 모드 — Workflows 웹후크
 
