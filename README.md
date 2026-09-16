@@ -63,6 +63,7 @@ cp .env.example .env
 #   TEAMS_CARD_MAP    카드 문자 식별번호 → 카드슬롯 매핑 (예: 3900:1,2903:2)
 #   TEAMS_MEMBER_ALIASES  (선택) 호칭 → 팀원 이름 (예: 홍길동=홍실장,실장님;김철수=김팀장,팀장님)
 #   GEMINI_API_KEY    (선택) 자연어 처리용 — aistudio.google.com/apikey에서 발급
+#   LLM_PROVIDER=openrouter + OPENROUTER_API_KEY  (선택) OpenRouter로 자연어 처리
 #   TEAMS_WEBHOOK_SECRET  아래 3단계에서 발급받아 입력
 ```
 
@@ -214,6 +215,19 @@ Gemini는 **thinking(추론)이 기본 On**이라 도구 호출 한 번이 수 �
 > `gemini-2.5-flash`는 **신규 사용자에게 차단**되어 호출 시 404가 납니다(`/models` 목록에는 여전히 나옵니다). 2.5 계열을 쓸 수 있는 기존 계정이라면 `GEMINI_REASONING_EFFORT=none`으로 thinking을 완전히 끌 수 있습니다.
 
 모델을 바꾸면 컨테이너를 **재생성**해야 적용됩니다 — [업데이트(재배포)](#5-업데이트재배포) 참고.
+
+## OpenRouter 설정
+
+Gemini 설정은 그대로 두고, OpenRouter의 모델을 선택할 수 있습니다. `.env`에서 아래처럼 설정한 뒤 컨테이너를 재생성하세요.
+
+```dotenv
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=<OpenRouter 키>
+OPENROUTER_MODEL=google/gemini-3.5-flash-lite
+OPENROUTER_REASONING_EFFORT=minimal
+```
+
+`LLM_PROVIDER`를 비우거나 `gemini`로 두면 기존 `GEMINI_API_KEY` 설정만 사용합니다. OpenRouter 요청은 `https://openrouter.ai/api/v1` OpenAI 호환 endpoint로 보내며, 모델명에는 `google/` 같은 제공자 접두사가 필요합니다. OpenRouter 계정의 입력·출력 로그 및 데이터 사용 opt-in을 끄고, 선택 모델 provider의 보존·학습 정책을 확인하세요.
 
 ## 비용
 
