@@ -36,6 +36,3 @@ export function checkTeamsHmac(rawBody, authHeader, secretB64) {
     ? { ok: true }
     : fail('서명 불일치 — TEAMS_WEBHOOK_SECRET 값이 Teams의 것과 같은지 확인');
 }
-
-export const verifyTeamsHmac = (rawBody, authHeader, secretB64) =>
-  checkTeamsHmac(rawBody, authHeader, secretB64).ok;

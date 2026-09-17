@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { checkTeamsHmac, verifyTeamsHmac } from '../src/hmac.js';
+import { checkTeamsHmac } from '../src/hmac.js';
 
 const SECRET = crypto.randomBytes(32).toString('base64');
 const BODY = Buffer.from('{"type":"message","text":"hi"}');
@@ -63,9 +63,4 @@ test('사유 문자열에 시크릿·서명·본문이 새지 않는다', () => 
     assert.ok(!r.reason.includes(SECRET), '시크릿 노출 금지');
     assert.ok(!r.reason.includes(auth.slice(5)), '서명 노출 금지');
   }
-});
-
-test('verifyTeamsHmac는 기존대로 boolean을 반환한다 (호환)', () => {
-  assert.equal(verifyTeamsHmac(BODY, sign(BODY), SECRET), true);
-  assert.equal(verifyTeamsHmac(BODY, 'Bearer abc', SECRET), false);
 });
