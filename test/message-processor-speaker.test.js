@@ -1,4 +1,4 @@
-// webhook-speaker.test.js — Teams activity에서 발화자 표시명을 꺼내는 부분.
+// message-processor-speaker.test.js — Teams activity에서 발화자 표시명을 꺼내는 부분.
 //
 // 이 값이 runNlAgent까지 가지 않아 "제가"가 엉뚱한 팀원으로 기입됐다. 예전에는
 // from.name을 사후 게시 머리말에만 썼기 때문이다. from.name은 테넌트마다 형식이
@@ -10,8 +10,7 @@ import assert from 'node:assert/strict';
 let speakerFromActivity;
 
 before(async () => {
-  // webhook.js는 import 시 TMM 연결을 하지 않지만, 다른 테스트와 형식을 맞춰 둔다.
-  ({ speakerFromActivity } = await import('../src/webhook.js'));
+  ({ speakerFromActivity } = await import('../src/message-processor.js'));
 });
 
 test('from.name이 있으면 앞뒤 공백을 떼고 돌려준다', () => {

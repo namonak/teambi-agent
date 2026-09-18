@@ -1,7 +1,7 @@
 // nl-agent-speaker.test.js — 발화자(Teams from.name)와 호칭이 시스템 프롬프트에 실리는지.
 //
 // "○○님과 제가 6,500원씩 썼어요"에 봇이 엉뚱한 팀원으로 기입한 사고가 있었다.
-// webhook은 from.name을 게시 머리말에만 쓰고 runNlAgent엔 넘기지 않았고, 프롬프트에도
+// 메시지 처리기는 from.name을 결과 머리말에만 쓰고 runNlAgent엔 넘기지 않았고, 프롬프트에도
 // 발화자 줄이 없어 모델이 "제가"를 팀원 목록에서 임의로 골랐다.
 // 여기서 검증하는 것은 그 경로다 — 발화자 줄, 1인칭 규칙, 호칭(별칭) 렌더.
 import { test, before, after } from 'node:test';

@@ -1,7 +1,7 @@
 // gemini.js — 자연어 처리·분류 폴백에 쓰는 LLM.
 // Gemini와 OpenRouter는 모두 OpenAI 호환 API라 같은 SDK·도구 루프를 쓴다.
 //
-// Teams 5초 예산 때문에 maxRetries는 0이고, 타임아웃은 호출할 때마다 남은 시간을 넘긴다.
+// 도구 호출 중복과 지연을 피하려 maxRetries는 0이고, 타임아웃은 호출자가 정한 데드라인을 넘긴다.
 import OpenAI from 'openai';
 
 // .env 값에 공백·CR이 섞이는 사고가 잦다. 정리해서 쓰되 오염 사실은 notes로 알린다
@@ -34,16 +34,16 @@ const CONFIG = {
 const RAW_MODEL = CONFIG && process.env[CONFIG.model];
 const RAW_BASE = CONFIG && process.env[CONFIG.base];
 // 기본 모델 선정 근거 (실측, NAS 컨테이너에서 도구 6종 물린 단발 호출):
-//   gemini-3.6-flash      라운드당 ~1,150ms → 수정·삭제류(3라운드)가 4.2초 예산 초과
-//   gemini-3.5-flash-lite 라운드당 ~732ms  → 3라운드도 예산 안 (준비 760 + 2,196 + 도구 600)
-// 더 강한 해석이 필요하면 GEMINI_MODEL=gemini-3.6-flash + 비동기 모드(25초)를 함께 쓴다.
+//   gemini-3.6-flash      라운드당 ~1,150ms
+//   gemini-3.5-flash-lite 라운드당 ~732ms
+// 더 강한 해석이 필요하면 GEMINI_MODEL=gemini-3.6-flash로 올릴 수 있다.
 // 참고: gemini-2.5-flash는 신규 사용자에게 차단됐다("no longer available to new users")
 // — 문서와 /models 목록에는 남아 있지만 실제 호출은 404로 거부된다.
 const MODEL = clean(RAW_MODEL) || CONFIG?.defaultModel;
 // *_BASE_URL은 프록시·테스트용 오버라이드다.
 const BASE_URL = clean(RAW_BASE) || CONFIG?.defaultBase;
 
-// thinking은 도구 호출 1라운드를 수 초~십수 초로 늘려 Teams 동기 예산(4.2s)을 넘긴다.
+// thinking은 도구 호출 1라운드를 수 초~십수 초로 늘린다.
 // Gemini 3 계열은 thinking을 끌 수 없으므로("Reasoning cannot be turned off for
 // Gemini 2.5 Pro or 3 models") 가장 낮은 minimal로 내리는 것이 최선이다.
 // 2.5 계열을 쓴다면 GEMINI_REASONING_EFFORT=none으로 완전히 끌 수 있다.

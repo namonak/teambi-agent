@@ -1,5 +1,5 @@
 // text.js — Teams 메시지 텍스트 정제.
-// Outgoing Webhook의 activity.text에는 봇 멘션(<at>장부장</at>)과
+// Teams Bot activity.text에는 봇 멘션(<at>장부장</at>)과
 // (textFormat이 html인 경우) HTML 태그·엔티티가 섞여 온다.
 export function extractUserText(activity) {
   let t = activity?.text ?? '';

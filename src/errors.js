@@ -1,6 +1,6 @@
 // errors.js — 외부 호출 실패를 "로그용 문자열"과 "채널 회신 문구"로 매핑하는 단일 지점.
 // 원칙: 원문 메시지는 채널에 절대 노출하지 않고(내부 정보 유출 방지) 로그에만 남긴다.
-// 이 파일이 없던 시절 nl-agent/tools/webhook이 각자 분기를 들고 있어 문구가 어긋났다.
+// 이 파일이 없던 시절 nl-agent/tools/message-processor가 각자 분기를 들고 있어 문구가 어긋났다.
 
 // 상위 API가 오류 본문에 정답을 담아 보낸다(예: "This model ... is no longer available
 // to new users"). SDK 요약 메시지만 남기면 그 정답이 버려진다.

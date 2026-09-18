@@ -13,7 +13,7 @@ function ensureLogin() {
 
 // 기동 시 세션을 미리 만들어 둔다.
 // 세션 없는 첫 요청은 createToolkit에서 로그인 왕복까지 물어 1.8초를 쓰는데,
-// Teams 동기 예산이 4.2초뿐이라 그것만으로 타임아웃했다.
+// 자연어 요청의 첫 결과가 불필요하게 늦어지지 않도록 기동 시 준비한다.
 // 실패는 그대로 던진다 — 기동을 막을지 로그만 남길지는 호출부가 정한다.
 export const warmUp = () => (sessionCookie ? Promise.resolve() : ensureLogin());
 

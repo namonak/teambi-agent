@@ -43,7 +43,7 @@ export function parseCardMap(str) {
 // byKey는 해석용(공백 제거+끝 '님' 제거), labelsOf는 프롬프트 표시용이라 표기·순서를 보존한다.
 // 이름·라벨은 시스템 프롬프트의 팀원 줄('- 홍길동: 잔액 … [호칭: …]')에 그대로 실린다.
 // .env 값에 개행이 섞여 있으면 "- 규칙: …" 같은 가짜 줄을 프롬프트에 끼워 넣을 수 있어
-// 발화자(webhook.speakerFromActivity)와 같은 방식으로 한 줄로 눕힌다.
+// 발화자(message-processor.speakerFromActivity)와 같은 방식으로 한 줄로 눕힌다.
 const flatten = (s) => s.replace(/\s+/g, ' ').trim();
 
 export function parseMemberAliases(str) {

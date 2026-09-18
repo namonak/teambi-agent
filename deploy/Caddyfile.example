@@ -8,7 +8,7 @@
 #   1) DNS: bot.namonak.dev → 이 서버의 공인 IP (A/AAAA 레코드)
 #   2) 이 파일을 /etc/caddy/Caddyfile 로 복사하고 도메인/주소를 실제 값으로 수정
 #   3) caddy reload  (또는 docker compose로 caddy 실행)
-#   4) Teams 발신 웹후크 콜백 URL: https://bot.namonak.dev/webhook
+#   4) Teams Bot 메시징 엔드포인트: https://bot.namonak.dev/api/messages
 
 bot.namonak.dev {
 	# 장부장 컨테이너로 전달.

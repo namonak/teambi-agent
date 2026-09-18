@@ -1,6 +1,6 @@
 // nl-agent.js — 자연어 명령 처리 (Gemini tool-use 루프).
-// Teams Outgoing Webhook은 5초 내 1회 응답만 가능하므로:
-//   - 수신 시점 기준 4.2초 데드라인, 최대 3라운드
+// Teams Bot 자연어 처리는 접수 응답 뒤에 백그라운드로 실행한다.
+//   - 호출자가 전달한 데드라인 안에서 최대 라운드를 수행
 //   - 재시도 없음(SDK maxRetries 0), 남은 시간 < 700ms면 중단
 //   - 타임아웃돼도 sideEffects로 "지금까지 처리된 것"을 정직하게 회신
 import * as gemini from './gemini.js';

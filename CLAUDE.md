@@ -18,15 +18,15 @@
 
 ### 개요
 
-**teambi-agent (장부장)** — Teams 채널의 카드 승인 SMS·자연어 메시지를 해석해 teamMoneyManager에 팀비 지출을 자동 기입/수정/삭제하는 AI Agent 봇
+**teambi-agent (장부장)** — Teams 단체 채팅의 카드 승인 SMS·자연어 메시지를 해석해 teamMoneyManager에 팀비 지출을 자동 기입/수정/삭제하는 Bot 앱
 
 | 항목 | 값 |
 |------|-----|
-| 기술 스택 | Node.js 20+ (ESM), Express 4, Gemini(gemini-3.5-flash-lite) — openai SDK로 OpenAI 호환 엔드포인트 호출 |
+| 기술 스택 | Node.js 22+ (ESM), Express 4, Microsoft Agents Hosting, Gemini(gemini-3.5-flash-lite) — openai SDK로 OpenAI 호환 엔드포인트 호출 |
 | 실행 방법 | `npm run dev` (개발) / `docker compose up -d` (배포, 포트 49877) |
-| 테스트 | `npm test` (node:test — parser/classify/hmac/text/gemini/errors/version/teams-notify) |
+| 테스트 | `npm test` (node:test — parser/classify/text/gemini/errors/version/Teams Bot) |
 | 연동 대상 | teamMoneyManager REST API (`TMM_BASE_URL`, 세션 쿠키 로그인) |
-| 수신 경로 | Teams Outgoing Webhook `POST /webhook` (HMAC-SHA256 검증, 5초 응답 제한) |
+| 수신 경로 | Teams Bot `POST /api/messages` (JWT 인증, groupChat scope) |
 | 상태 | 개발 중 |
 
 ### 문서 구조 (소유권 분리)
@@ -48,8 +48,8 @@
 
 ### 핵심 규칙
 
-- **비밀값 커밋 금지** — public repo. 비밀번호·API 키·웹훅 시크릿·내부 URL은 `.env`로만 관리 (`.env.example`에 placeholder만)
-- **5초 응답 예산** — Teams Outgoing Webhook 제약. LLM 호출은 데드라인 가드(4.2s) 안에서만, SDK `maxRetries: 0`
+- **비밀값 커밋 금지** — public repo. 비밀번호·API 키·Microsoft App 비밀값·내부 URL은 `.env`로만 관리 (`.env.example`에 placeholder만)
+- **자연어 응답** — 먼저 접수하고 같은 groupChat에 사후 결과를 보낸다. SDK `maxRetries: 0` 유지
 - **teamMoneyManager 수정 금지** — 모든 데이터 조작은 REST API 경유 (당월만 기입 가능한 앱 정책 준수)
 - **회신은 채널에 그대로 노출** — 사용자 대면 한국어 문구, 원시 에러 코드 노출 금지
 

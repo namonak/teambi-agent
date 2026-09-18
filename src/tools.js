@@ -14,7 +14,7 @@ const TOOL_DEFS = [
   },
   // list_members는 두지 않는다 — 활성 팀원 목록은 시스템 프롬프트에 이미 실려 있고
   // 이 도구는 네트워크 조회 없이 같은 배열을 되돌려줄 뿐이다. 정보량은 0인데 LLM
-  // 라운드를 하나(약 1,150ms) 소모해 Teams 4.2초 예산을 무너뜨렸다.
+  // 라운드를 하나(약 1,150ms) 소모해 응답만 늦춘다.
   // 이름 → id 해석은 아래 resolveByName이 toolkit의 members로 처리한다.
   {
     name: 'list_recent_transactions',

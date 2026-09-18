@@ -1,18 +1,14 @@
-// webhook.js — Teams Outgoing Webhook 핸들러.
-// HMAC 검증 → activity.id 중복 제거 → SMS/자연어 라우팅 → 한국어 회신.
-// 회신은 항상 {type:'message', text} + HTTP 200 (HMAC 실패만 401).
-import { checkTeamsHmac } from './hmac.js';
+// message-processor.js — Teams 메시지 처리기.
+// Activity 중복 제거 → SMS/자연어 라우팅 → 한국어 회신.
 import { extractUserText } from './text.js';
 import { looksLikeCardSms, parseCardSms } from './sms-parser.js';
 import { classifyCategory } from './classify.js';
 import { runNlAgent } from './nl-agent.js';
-import { notifyEnabled, postToChannel } from './teams-notify.js';
 import { describeError, serviceUserMessage } from './errors.js';
 import * as tmm from './tmm-client.js';
 import { currentPeriod, parseCardMap, fmtWon, fmtDateShort, cardLabel } from './util.js';
 
-const DEADLINE_MS = 4200; // Teams 5초 제한 대비 응답 예산 (동기 모드)
-const ASYNC_DEADLINE_MS = 25_000; // 비동기 모드(사후 게시) 처리 예산
+const ASYNC_DEADLINE_MS = 25_000;
 const ASYNC_MAX_ROUNDS = 6;
 const DEDUPE_MAX = 300;
 const DEDUPE_TTL_MS = 10 * 60 * 1000;
@@ -31,8 +27,6 @@ function dedupeSet(id, entry) {
   }
 }
 
-const msg = (text) => ({ type: 'message', text });
-
 // 회신 끝에 붙일 잔액 줄. 부가 정보이므로 실패해도 회신을 막지 않고 빈 문자열로 넘어간다.
 // (조회 실패 이유는 로그로만 — 사용자는 기입/삭제가 성공했는지가 중요하다)
 export async function balanceLineFor(period, categoryId) {
@@ -41,7 +35,7 @@ export async function balanceLineFor(period, categoryId) {
     const c = d.categories.find((x) => x.id === categoryId);
     return c ? `\n${c.name} 잔액: ${fmtWon(c.remaining)} / ${fmtWon(c.allocated)}` : '';
   } catch (e) {
-    console.warn('[webhook] 잔액 조회 실패:', describeError(e));
+    console.warn('[message-processor] 잔액 조회 실패:', describeError(e));
     return '';
   }
 }
@@ -140,49 +134,34 @@ export function speakerFromActivity(activity) {
   return cut || null;
 }
 
-// --- 자연어 비동기 처리 (즉시 접수 응답 → 완료 후 Workflows 웹후크로 게시) ----
+// --- 자연어 비동기 처리 ---------------------------------------------------
 async function processNlAsync(text, speaker) {
   let result;
   try {
     result = await runNlAgent(text, Date.now() + ASYNC_DEADLINE_MS, { maxRounds: ASYNC_MAX_ROUNDS, speaker });
   } catch (e) {
-    console.error('[webhook] 비동기 처리 오류:', e);
+    console.error('[message-processor] 비동기 처리 오류:', e);
     result = '😵 처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
   }
-  const quoted = text.replace(/\s+/g, ' ').slice(0, 40);
-  const head = `📣 ${speaker ? `${speaker}님 ` : ''}요청 결과 — 「${quoted}${text.length > 40 ? '…' : ''}」`;
-  try {
-    await postToChannel(`${head}\n${result}`);
-  } catch (e) {
-    // 게시 실패해도 기입 자체는 완료됐을 수 있음 — 로그만 남긴다
-    console.error('[webhook] 채널 게시 실패:', e.message);
-  }
+  return result;
 }
 
-// --- 메인 핸들러 -----------------------------------------------------------
-export function createWebhookHandler() {
+// --- Teams Bot 메시지 처리 -------------------------------------------------
+// 자연어는 즉시 접수 응답 뒤에 followUp으로 처리한다. Bot adapter가 그 결과를
+// 원래 대화 참조로 능동 전송한다.
+export function createMessageProcessor() {
   const cardMap = parseCardMap(process.env.TEAMS_CARD_MAP);
 
-  return async function webhook(req, res) {
-    // 1) HMAC 검증 (원문 바이트는 server.js의 express.json verify 훅이 보존)
-    const hmac = checkTeamsHmac(req.rawBody, req.headers.authorization, process.env.TEAMS_WEBHOOK_SECRET);
-    if (!hmac.ok) {
-      // 사유는 로그에만 — 회신 문구는 그대로 두어 외부에 힌트를 주지 않는다
-      console.warn('[webhook] HMAC 검증 실패:', hmac.reason);
-      return res.status(401).json(msg('인증에 실패했어요. 웹훅 보안 토큰 설정을 확인해 주세요.'));
-    }
+  return async function processActivity(activity = {}) {
+    if (activity.type && activity.type !== 'message') return { reply: '' };
 
-    const activity = req.body ?? {};
-    if (activity.type && activity.type !== 'message') return res.json(msg(''));
-
-    // 2) 중복 제거 (Teams 타임아웃 재시도 대비)
+    // Teams 재시도 대비
     const id = activity.id;
     const seen = id ? dedupe.get(id) : undefined;
-    if (seen?.state === 'done') return res.json(msg(seen.reply));
-    if (seen?.state === 'inflight') return res.json(msg('⏳ 같은 메시지를 처리 중이에요…'));
+    if (seen?.state === 'done') return { reply: seen.reply };
+    if (seen?.state === 'inflight') return { reply: '⏳ 같은 메시지를 처리 중이에요…' };
     dedupeSet(id, { state: 'inflight' });
 
-    const deadline = Date.now() + DEADLINE_MS;
     const text = extractUserText(activity);
     const speaker = speakerFromActivity(activity); // "제가"가 누구인지의 유일한 근거
     let reply;
@@ -202,24 +181,17 @@ export function createWebhookHandler() {
         }
       } else {
         // Teams from.name의 실제 형식을 실서버 로그로 확정하기 위한 1줄(본문·금액은 남기지 않는다).
-        console.info('[webhook] 발화자 from.name=%j', speaker);
-        if (notifyEnabled()) {
-          // 비동기 모드: 5초 제한을 피해 즉시 접수 응답, 결과는 채널에 사후 게시.
-          // 처리 지속을 위해 응답을 먼저 보내고 백그라운드로 이어간다.
-          reply = '⏳ 접수했어요! 처리가 끝나면 결과를 채널에 올릴게요.';
-          dedupeSet(id, { state: 'done', reply });
-          res.json(msg(reply));
-          processNlAsync(text, speaker).catch((e) => console.error('[webhook] 비동기 처리 미처리 예외:', e));
-          return;
-        }
-        reply = await runNlAgent(text, deadline, { speaker });
+        console.info('[message-processor] 발화자 from.name=%j', speaker);
+        reply = '⏳ 접수했어요! 처리가 끝나면 결과를 이 대화방에 알려드릴게요.';
+        dedupeSet(id, { state: 'done', reply });
+        return { reply, followUp: () => processNlAsync(text, speaker) };
       }
     } catch (e) {
-      console.error('[webhook] 처리 오류:', describeError(e));
+      console.error('[message-processor] 처리 오류:', describeError(e));
       reply = `😵 ${serviceUserMessage(e)}`;
     }
 
     dedupeSet(id, { state: 'done', reply });
-    return res.json(msg(reply));
+    return { reply };
   };
 }

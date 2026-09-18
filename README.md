@@ -1,234 +1,85 @@
 # 장부장 (teambi-agent)
 
-Microsoft Teams 채널에 **카드 승인 문자를 붙여넣거나 자연어로 말하면**, 팀비 관리 웹앱([teamMoneyManager](https://github.com/leonardo204/teamMoneyManager) 계열의 REST API를 제공하는 앱)에 지출을 자동으로 **기입·수정·삭제**해 주는 AI Agent 봇입니다.
+Teams **단체 채팅**에 앱을 설치한 뒤 @장부장으로 카드 승인 문자와 자연어 요청을 보내면 팀비 지출을 기록·수정·삭제하고 잔액을 알려주는 Bot 앱입니다.
 
-```
-Teams 채널 ── @장부장 멘션 ──▶ teambi-agent ── REST API ──▶ teamMoneyManager
-                (Outgoing Webhook, HMAC)      (세션 로그인)
-```
+~~~
+Teams 단체 채팅 ── @장부장 ──▶ Teams Bot (/api/messages) ──▶ teamMoneyManager REST API
+~~~
 
-## 사용 예시
+카드 승인 SMS는 바로 결과를 답하고, 자연어 요청은 먼저 접수한 뒤 같은 대화방에 완료 결과를 보냅니다. 채널과 개인 채팅은 지원하지 않습니다.
 
-**카드 승인 문자 붙여넣기** (AI 불필요 — 정규식 파싱, 즉시 등록):
+## 설정과 실행
 
-> @장부장 [Web발신]
-> BC바로(0904)승인
-> 법인
-> 1,600원 일시불
-> 06/29 12:56
-> 매머드익스프레스 서초마제스타시티점
-> 잔여한도1,760원
-
-봇 응답:
-
-> ✅ 지출 등록 완료 (#123)
-> 06/29 · 1,600원 · 커피 · 카드1
-> 가맹점: 매머드익스프레스 서초마제스타시티점
-> 커피 잔액: 43,400원 / 210,000원
-
-**자연어** (Gemini API 키 설정 시 — 아래 [Gemini 설정](#gemini-설정) 참조):
-
-> @장부장 어제 회식 8만원 카드1로 썼어
-> @장부장 아까 그 커피 1,600원짜리 2,000원으로 수정해줘
-> @장부장 이번 달 커피 얼마 남았어?
-> @장부장 홍길동 개인 잔액 얼마야?
-> @장부장 제가 커피 4,500원 썼어요
-> @장부장 실장님 점심 12,000원
-
-**"제가"는 메시지를 보낸 본인**으로 처리합니다(Teams가 보내는 `from.name`을 팀원 목록과 대조). 발화자가 팀원 목록에 없으면 추측해서 기입하지 않고 누구의 지출인지 되묻습니다. **직책·호칭**은 "홍길동 실장님"처럼 이름이 함께 있으면 그대로 해석하고, "실장님"처럼 직책만 부르는 말을 쓰려면 `.env`의 `TEAMS_MEMBER_ALIASES`에 매핑을 적어야 합니다(회원 정보에 직책 필드가 없기 때문).
-
-**승인취소 문자**를 붙여넣으면 일치하는 지출 1건을 찾아 자동 삭제합니다(후보가 여럿이면 자동 삭제하지 않고 후보를 보여줍니다).
-
-## 동작 방식
-
-| 입력 | 처리 | AI 필요 |
-|---|---|---|
-| 카드 승인 SMS | 정규식 파싱 → 키워드 분류(커피/간식/회식/야근) → 즉시 기입 | ❌ (분류 애매할 때만 폴백) |
-| 승인취소 SMS | 금액+카드+가맹점 매칭 → 1건이면 자동 삭제 | ❌ |
-| 자연어 | Gemini tool-use 루프 — 조회/기입/수정/삭제 도구 5종 | ✅ |
-
-- **teamMoneyManager는 수정하지 않습니다.** 모든 조작은 기존 REST API(`/api/transactions` 등)로 수행합니다.
-- Teams Outgoing Webhook의 **HMAC-SHA256 서명을 검증**하고, 재시도로 인한 **중복 기입을 방지**(activity.id 기준)합니다.
-- Teams의 **5초 응답 제한**에 맞춰 AI 호출은 4.2초 데드라인 안에서만 수행하고, 타임아웃 시에도 처리된 내역을 정직하게 회신합니다.
-
-## 설치
-
-### 1. 설정
-
-```bash
+~~~
 cp .env.example .env
-# .env를 열어 값 입력:
-#   TMM_BASE_URL      teamMoneyManager 주소 (같은 서버면 http://localhost:49876)
-#   TMM_PASSWORD      teamMoneyManager 로그인 비밀번호
-#   TEAMS_CARD_MAP    카드 문자 식별번호 → 카드슬롯 매핑 (예: 3900:1,2903:2)
-#   TEAMS_MEMBER_ALIASES  (선택) 호칭 → 팀원 이름 (예: 홍길동=홍실장,실장님;김철수=김팀장,팀장님)
-#   GEMINI_API_KEY    (선택) 자연어 처리용 — aistudio.google.com/apikey에서 발급
-#   LLM_PROVIDER=openrouter + OPENROUTER_API_KEY  (선택) OpenRouter로 자연어 처리
-#   TEAMS_WEBHOOK_SECRET  아래 3단계에서 발급받아 입력
-```
+~~~
 
-### 2. 실행
+.env에서 아래 값을 채웁니다.
 
-```bash
-# Docker (권장)
+| 변수 | 값 |
+| --- | --- |
+| TMM_BASE_URL, TMM_PASSWORD | teamMoneyManager 주소와 로그인 비밀번호 |
+| MicrosoftAppId | Teams Developer Portal에서 등록한 Bot 앱 ID |
+| MicrosoftAppPassword | 해당 앱의 클라이언트 비밀값 |
+| MicrosoftAppTenantId | Microsoft 365 테넌트 ID |
+| PUBLIC_BASE_URL | Bot의 HTTPS 공개 주소. 예: https://bot.namonak.dev |
+| TEAMS_CARD_MAP | 선택. 예: 3900:1,2903:2 |
+| TEAMS_MEMBER_ALIASES | 선택. 예: 홍길동=홍실장,실장님 |
+| GEMINI_API_KEY 또는 OPENROUTER_API_KEY | 선택. 자연어 처리용 |
+
+~~~
 docker compose up -d --build
+curl http://localhost:49877/health
+~~~
 
-# 또는 로컬
-npm install
-npm run dev
-```
+HTTPS 프록시에서 /api/messages와 /health를 localhost:49877로 전달해야 합니다. 제공한 Caddy 예시를 쓴다면 deploy/Caddyfile.example의 도메인을 실제 주소로 바꾸면 됩니다.
 
-`GET /health`로 기동 확인: `curl http://localhost:49877/health`
+## Teams Bot 앱 등록
 
-### 3. Teams Outgoing Webhook 등록
+1. Teams Developer Portal에서 Bot 앱을 만들고 Messaging endpoint를 PUBLIC_BASE_URL/api/messages로 설정합니다.
+2. 발급받은 앱 ID·비밀값·테넌트 ID를 .env에 넣고 컨테이너를 재생성합니다.
+3. appPackage/manifest.json의 validDomains를 실제 공개 도메인으로 맞춥니다.
+4. 앱 패키지를 만듭니다.
 
-1. Teams → 대상 팀 → ⋯ → **팀 관리 → 앱 → 발신 웹후크 만들기** (Create an outgoing webhook)
-2. 이름 `장부장`, 콜백 URL `https://<공개주소>/webhook` 입력 → 만들기
-3. 생성 직후 **1회만 표시되는 보안 토큰**을 복사해 `.env`의 `TEAMS_WEBHOOK_SECRET`에 저장 → **컨테이너 재생성**([업데이트](#5-업데이트재배포) 참고. `.env`는 컨테이너 생성 시점에만 읽히므로 재시작으로는 반영되지 않습니다)
-4. 채널에서 `@장부장 <문자 붙여넣기 또는 자연어>`로 사용
+   ~~~
+   bash scripts/package-teams-app.sh
+   ~~~
 
-> **공개 주소**: Teams가 이 서버로 직접 POST하므로 `/webhook`이 HTTPS로 인터넷에서 접근 가능해야 합니다.
->
-> **장부장은 teamMoneyManager와 같은 서버에 둘 필요가 없습니다.** 인바운드(Teams → 장부장)만 본인이 통제하는 HTTPS 주소면 되고, 아웃바운드(장부장 → teamMoneyManager)는 `TMM_BASE_URL`로 공개 주소를 호출할 뿐입니다. 따라서 **본인 소유 도메인**(예: `bot.namonak.dev`)에 장부장만 올리고, `.env`에서 `TMM_BASE_URL=https://<teamMoneyManager 공개주소>` 로 가리키면 됩니다.
->
-공개 HTTPS 주소를 붙이는 방법은 환경에 따라 둘 중 하나:
+5. 생성된 dist/teambi-agent-YYYYMMDD-HHMMSS.zip을 Teams에 업로드하고, 사용할 단체 채팅에 앱을 추가합니다.
+6. 해당 대화방에서 @장부장 이번 달 커피 잔액 알려줘처럼 호출합니다.
 
-**A) 이미 리버스 프록시가 있는 경우 (Synology NAS, Nginx 등)** — 권장. 새 웹서버를 띄우지 말고 기존 프록시에 경로만 추가한다.
+color.png은 제공한 장부장 이미지, outline.png은 Teams 앱 목록용 단색 윤곽 아이콘입니다. ZIP에는 앱 ID와 아이콘만 들어가며 비밀값은 포함되지 않습니다.
 
-- 루트 `docker-compose.yml`로 장부장만 기동(호스트 49877 포트 노출):
-  ```bash
-  docker compose up -d --build
-  ```
-- 리버스 프록시에서 `bot.namonak.dev` → `localhost:49877` 로 전달.
-  - **Synology DSM**: 제어판 → 로그인 포털 → 고급 → 리버스 프록시 → 생성
-    - 소스: HTTPS / `bot.namonak.dev` / 443
-    - 대상: HTTP / `localhost` / 49877
-    - (`bot.namonak.dev` 인증서가 이미 있으면 그대로 물린다. `Authorization` 헤더는 그대로 전달되어 HMAC 검증 정상 동작.)
+## AI 설정
 
-**B) 프록시가 없는 빈 서버** — [`deploy/`](deploy/)의 Caddy 예시로 자동 HTTPS까지 한 번에:
-```bash
-cp deploy/Caddyfile.example deploy/Caddyfile   # 도메인 수정
-docker compose -f docker-compose.yml -f deploy/docker-compose.caddy.yml up -d --build
-```
-Caddy가 Let's Encrypt 인증서를 자동 발급한다. (80/443 포트가 비어 있어야 함.)
+Gemini가 기본값입니다.
 
-어느 쪽이든 Teams 웹훅 콜백 URL은 `https://bot.namonak.dev/webhook`.
+~~~dotenv
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=
+~~~
 
-### 4. (선택·권장) 자연어 비동기 모드 — Workflows 웹후크
+OpenRouter를 쓰려면 다음처럼 설정합니다.
 
-Outgoing Webhook은 **5초 내 1회 응답**만 허용해서, 자연어 다건 등록이나 느린 AI 응답은 시간이 부족할 수 있습니다. Teams **Workflows 웹후크**를 연결하면 자연어 요청에 "⏳ 접수했어요"로 즉답하고, 실제 결과(최대 25초 처리)를 채널에 따로 게시합니다.
+~~~dotenv
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_MODEL=google/gemini-3.5-flash-lite
+OPENROUTER_REASONING_EFFORT=minimal
+~~~
 
-1. Teams에서 결과를 올릴 **채널 이름 옆 ⋯ → 워크플로**(Workflows) 클릭
-2. 템플릿 검색: **"웹후크 요청이 수신되면 채널에 게시"** (Post to a channel when a webhook request is received) → 선택
-3. 팀/채널 확인 → **흐름 추가** → 생성된 **HTTP POST URL 복사**
-4. `.env`의 `TEAMS_INCOMING_WEBHOOK_URL=`에 붙여넣고 컨테이너 재생성(`docker compose down && docker compose up -d`)
-
-> - 기존 O365 커넥터 방식 "수신 웹후크"는 **2026년 5월 폐기**됐습니다 — 반드시 Workflows 앱으로 만드세요.
-> - 사후 게시 메시지는 Teams 정책상 "Workflows(Flow bot)" 이름으로 표시됩니다(장부장 이름/아이콘 커스텀 불가).
-> - **사후 게시는 원 메시지의 스레드(답장)가 아니라 채널의 새 글로 올라옵니다.** 스레드 답장 UX가 더 중요하면 이 모드를 끄고(URL 비우기) 동기 모드로 쓰세요 — 동기 모드도 다건 병렬 기입 유도가 적용되어 3~4건까지는 대부분 5초 안에 처리됩니다.
-> - 미설정 시 기존처럼 5초 동기 모드로 동작합니다. 카드 SMS 기입은 어차피 빨라서 항상 즉답합니다.
-
-### 5. 업데이트(재배포)
-
-소스를 바꿨거나 `.env`를 고쳤으면 **컨테이너를 재생성**해야 합니다. `.env`는 컨테이너를 만들 때 한 번만 읽히고, 이미지도 재빌드해야 새 코드가 들어갑니다. **재시작이나 중지→시작으로는 둘 다 반영되지 않습니다.**
-
-```bash
-git pull
-docker compose down            # 먼저 완전히 내린다
-docker compose up -d --build
-```
-
-**Synology Container Manager**에서는 프로젝트 → **작업 → 지우기(Clean)** → **작업 → 빌드** 순서입니다. "지우기"가 위 `down`에 해당합니다.
-
-> ⚠️ **`up --force-recreate`는 쓰지 마세요.** Compose는 재생성 시 기존 컨테이너를 `<짧은ID>_<이름>`으로 개명해 이름을 비운 뒤 새로 만드는데, 새 컨테이너 시작이 실패하면 `517aee866a1c_teambi-agent` 같은 이름의 옛 컨테이너가 남아 계속 돕니다([docker/compose#10460](https://github.com/docker/compose/issues/10460)). `down`은 삭제 후 생성이라 이 단계 자체가 없습니다.
->
-> 이미 이런 컨테이너가 생겼다면 해당 컨테이너를 **중지 → 삭제**한 뒤 위 절차를 다시 밟으세요.
-
-**반영 확인** — 기동 로그 첫 줄의 빌드 시각을 보면 됩니다.
-
-```
-[teambi-agent] 🏷️ v0.1.0 · 빌드 2026-08-14T05:56:38Z
-```
-
-방금 빌드한 시각이 아니면 이미지가 갱신되지 않은 것입니다. 로그를 볼 수 없으면 `curl http://localhost:49877/health`로도 같은 정보가 나옵니다.
-
-**기동 로그로 설정 점검** — 다음 경고가 보이면 `.env`를 확인하세요.
-
-| 로그 | 의미 |
-|---|---|
-| `🧠 자연어 처리: gemini · 모델 gemini-3.5-flash-lite` | 정상. 실제 호출할 모델을 확인할 수 있음 |
-| `⚠️ GEMINI_MODEL 값에 공백/개행이 섞여 있어요` | 모델명 오염 — 방치하면 호출 시 404 |
-| `⚠️ 엔드포인트가 재정의됨: ...` | `GEMINI_BASE_URL`이 설정돼 공식 주소로 안 나감 |
-| `ℹ️ GEMINI_API_KEY 미설정` | 해당 키가 비어 있음 |
-| `[webhook] HMAC 검증 실패: 서명 불일치 ...` | `TEAMS_WEBHOOK_SECRET`이 Teams의 것과 다름 |
-| `[webhook] HMAC 검증 실패: Authorization 헤더 없음 ...` | 리버스 프록시가 헤더를 떨구고 있음 |
-| `[webhook] HMAC 검증 실패: 요청 본문을 읽지 못함 ...` | Content-Type이 `application/json`이 아님 |
-| `[webhook] 발화자 from.name="홍길동"` · `[nl-agent] 발화자 해석: 홍길동(id 11)` | 자연어 요청의 발화자 인식 결과. `(팀원 목록에 없음)`이면 `TEAMS_MEMBER_ALIASES`에 표시명을 추가 |
-
-## 제약 사항 (Teams Outgoing Webhook)
-
-- 봇을 **@멘션한 메시지에만** 반응합니다 (채널 전용, 개인 채팅 불가)
-- **5초 내 1회 응답** 제한 — 자연어는 위 4번(비동기 모드)으로 우회 가능
-- 더 나은 UX(멘션 불필요, 버튼 카드, 능동 알림)가 필요하면 Azure Bot Service 기반 정식 봇으로 업그레이드하는 경로가 있습니다
+API 키가 없어도 카드 승인 SMS의 정규식 파싱과 키워드 분류는 동작합니다.
 
 ## 개발
 
-```bash
-npm test          # 단위 테스트 (파서/분류/HMAC/텍스트 정제/Gemini 요청/오류 매핑/Workflows 알림)
-npm run dev       # watch 모드
-```
+~~~
+npm test
+npm run dev
+~~~
 
-```
-src/
-├── server.js      # Express 엔트리 (POST /webhook, GET /health)
-├── webhook.js     # HMAC 검증 → 중복제거 → SMS/자연어 라우팅 → 회신
-├── hmac.js        # Teams HMAC-SHA256 검증
-├── text.js        # 멘션/HTML 정제
-├── sms-parser.js  # 카드 SMS 정규식 파서
-├── classify.js    # 카테고리 분류 (키워드 → LLM 폴백 → 기본값)
-├── nl-agent.js    # Gemini tool-use 루프 (동기 4.2s / 비동기 25s)
-├── gemini.js      # Gemini 호출 (OpenAI 호환 엔드포인트 경유)
-├── errors.js      # 외부 호출 실패 → 로그 문구 / 채널 회신 문구 매핑
-├── version.js     # 빌드 식별 정보 (기동 로그 · /health)
-├── teams-notify.js# Workflows 웹후크 사후 게시 (Adaptive Card)
-├── tools.js       # LLM 도구 5종
-├── names.js       # 팀원 이름 참조 정규화·매칭 (직책/호칭/별칭)
-├── tmm-client.js  # teamMoneyManager REST 클라이언트
-└── util.js        # 날짜/금액/설정 유틸
-```
+배포 코드나 .env를 바꾼 뒤에는 다음처럼 컨테이너를 다시 만듭니다.
 
-## Gemini 설정
-
-자연어 처리와 분류 폴백에 Gemini를 사용합니다. Google의 **OpenAI 호환 엔드포인트**를 `openai` SDK로 호출합니다(네이티브 API가 아닙니다).
-
-| 항목 | 값 |
-|---|---|
-| 키 발급 | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — 무료 티어 있음, 카드 등록 불필요 |
-| 기본 모델 | `gemini-3.5-flash-lite` (`GEMINI_MODEL`로 변경) — Teams 5초 예산 안에 3라운드 도구 호출까지 들어오는 유일한 모델 |
-| 비용 | 무료 티어로 0원까지 가능 (예: 15 RPM · 1,000 RPD) |
-| 데이터 | ⚠️ **무료 티어는 입력·출력이 Google 제품 개선(학습)에 사용될 수 있음** — 가맹점명·금액·팀원 이름이 전송되므로 회사 데이터 정책 확인 후 사용 |
-
-Gemini는 **thinking(추론)이 기본 On**이라 도구 호출 한 번이 수 초 이상 걸려 Teams 5초 예산을 넘깁니다. 그래서 `reasoning_effort=minimal`로 낮춰 호출합니다(`GEMINI_REASONING_EFFORT`로 변경 가능).
-
-> ⚠️ **Gemini 3 계열은 thinking을 완전히 끌 수 없습니다**([공식 문서](https://ai.google.dev/gemini-api/docs/openai): *"Reasoning cannot be turned off for Gemini 2.5 Pro or 3 models"*). `minimal`이 최소값입니다. 따라서 5초 동기 모드로는 자연어 처리가 시간을 넘길 수 있으니 **[비동기 모드](#4-선택권장-자연어-비동기-모드--workflows-웹후크) 설정을 강력히 권장**합니다.
->
-> `gemini-2.5-flash`는 **신규 사용자에게 차단**되어 호출 시 404가 납니다(`/models` 목록에는 여전히 나옵니다). 2.5 계열을 쓸 수 있는 기존 계정이라면 `GEMINI_REASONING_EFFORT=none`으로 thinking을 완전히 끌 수 있습니다.
-
-모델을 바꾸면 컨테이너를 **재생성**해야 적용됩니다 — [업데이트(재배포)](#5-업데이트재배포) 참고.
-
-## OpenRouter 설정
-
-Gemini 설정은 그대로 두고, OpenRouter의 모델을 선택할 수 있습니다. `.env`에서 아래처럼 설정한 뒤 컨테이너를 재생성하세요.
-
-```dotenv
-LLM_PROVIDER=openrouter
-OPENROUTER_API_KEY=<OpenRouter 키>
-OPENROUTER_MODEL=google/gemini-3.5-flash-lite
-OPENROUTER_REASONING_EFFORT=minimal
-```
-
-`LLM_PROVIDER`를 비우거나 `gemini`로 두면 기존 `GEMINI_API_KEY` 설정만 사용합니다. OpenRouter 요청은 `https://openrouter.ai/api/v1` OpenAI 호환 endpoint로 보내며, 모델명에는 `google/` 같은 제공자 접두사가 필요합니다. OpenRouter 계정의 입력·출력 로그 및 데이터 사용 opt-in을 끄고, 선택 모델 provider의 보존·학습 정책을 확인하세요.
-
-## 비용
-
-카드 문자 기입은 대부분 키워드 분류로 처리되어 **API 호출이 발생하지 않습니다**. Gemini가 쓰이는 것은 자연어 명령과 분류가 애매한 소수 케이스뿐이라, 무료 티어 한도 안에서 **0원**으로 운영할 수 있습니다(위 데이터 정책 주의).
+~~~
+docker compose down
+docker compose up -d --build
+~~~

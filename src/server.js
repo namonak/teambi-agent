@@ -1,30 +1,23 @@
 // server.js — 장부장(teambi-agent) 엔트리.
-// Teams Outgoing Webhook 수신 서버. 데이터 조작은 전부 teamMoneyManager REST API 경유.
+// Teams Bot 수신 서버. 데이터 조작은 전부 teamMoneyManager REST API 경유.
 import express from 'express';
-import { createWebhookHandler } from './webhook.js';
+import { authorizeJWT } from '@microsoft/agents-hosting';
+import { createTeamsBot, teamsMessagesHandler } from './teams-bot.js';
 import * as gemini from './gemini.js';
 import * as tmm from './tmm-client.js';
 import { describeError } from './errors.js';
-import { notifyEnabled } from './teams-notify.js';
 import { versionInfo, versionLine } from './version.js';
 
 const PORT = Number(process.env.PORT || 49877);
 
 const app = express();
 
-// HMAC 검증용 원문 바이트 보존 — JSON.stringify 재직렬화는 서명이 어긋나므로 금지
-app.use(
-  express.json({
-    verify: (req, _res, buf) => {
-      req.rawBody = buf;
-    },
-  }),
-);
-
 // 로그를 볼 수 없는 상황에서도 배포 반영 여부를 확인할 수 있도록 버전을 함께 노출한다
 app.get('/health', (_req, res) => res.json({ ok: true, name: 'teambi-agent', ...versionInfo() }));
 
-app.post('/webhook', createWebhookHandler());
+const teamsBot = createTeamsBot();
+if (teamsBot) app.post('/api/messages', express.json(), authorizeJWT(teamsBot.auth), teamsMessagesHandler(teamsBot));
+else app.post('/api/messages', (_req, res) => res.status(503).json({ error: 'Teams Bot 설정이 필요합니다.' }));
 
 // 프로세스 레벨 안전망 — 예기치 못한 예외로 컨테이너가 조용히 죽지 않도록 로그를 남긴다.
 // (Docker restart:unless-stopped가 최종 복구망이므로 여기선 로깅을 우선한다)
@@ -35,17 +28,16 @@ const server = app.listen(PORT, () => {
   // 첫 줄에 고정 — 어떤 빌드가 도는지부터 확인할 수 있어야 한다
   console.log(`[teambi-agent] 🏷️ ${versionLine()}`);
   console.log(`[teambi-agent] 장부장 대기 중 — http://localhost:${PORT}`);
-  if (!process.env.TEAMS_WEBHOOK_SECRET) console.warn('[teambi-agent] ⚠️ TEAMS_WEBHOOK_SECRET 미설정 — 모든 웹훅 요청이 401 처리됩니다');
+  if (!teamsBot) console.warn('[teambi-agent] ⚠️ MicrosoftAppId 또는 MicrosoftAppPassword 미설정 — Teams Bot 요청을 받을 수 없습니다');
   // 실제 설정을 그대로 드러낸다 — 값이 오염돼도 조용히 넘어가면 원인 추적이 막힌다
   const llm = gemini.status();
   for (const note of llm.notes) console.warn(`[teambi-agent] ⚠️ ${note}`);
-  if (llm.configured) console.log(`[teambi-agent] 🧠 자연어 처리: gemini · 모델 ${llm.model}`);
+  if (llm.configured) console.log(`[teambi-agent] 🧠 자연어 처리: ${llm.name} · 모델 ${llm.model}`);
   else console.warn(`[teambi-agent] ℹ️ ${llm.hint} 미설정 — 자연어 처리는 비활성(정형 SMS만 동작)`);
-  if (notifyEnabled()) console.log('[teambi-agent] 📮 자연어 비동기 모드: 즉시 접수 → Workflows 웹후크 사후 게시');
-  else console.log('[teambi-agent] ℹ️ TEAMS_INCOMING_WEBHOOK_URL 미설정 — 자연어는 5초 동기 모드');
+  if (teamsBot) console.log('[teambi-agent] 🤖 Teams Bot: 그룹 채팅 멘션 수신 · 자연어 즉시 접수 → 사후 응답');
 
   // 세션 없는 첫 요청은 로그인 왕복까지 물어 준비에만 1.8초를 쓴다(측정값).
-  // 동기 모드 예산이 4.2초뿐이라 그것만으로 타임아웃하므로 미리 만들어 둔다.
+  // 첫 요청 지연을 줄이기 위해 미리 만들어 둔다.
   // 실패해도 기동은 계속한다 — 요청 시점에 다시 로그인한다.
   const warmStart = Date.now();
   tmm.warmUp().then(

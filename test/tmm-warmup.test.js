@@ -1,7 +1,7 @@
 // tmm-warmup.test.js — 기동 시 teamMoneyManager 세션 준비.
 //
 // 측정: 세션 없는 첫 요청의 createToolkit이 1,858ms였다(로그인 왕복 포함).
-// Teams 동기 예산이 4.2초뿐이라 첫 요청은 이것만으로 44%를 잃고 타임아웃했다.
+// 첫 자연어 요청은 이것만으로 눈에 띄게 늦어진다.
 // 기동 시점에 미리 로그인해 두면 첫 요청도 두 번째 요청과 같은 조건이 된다.
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
