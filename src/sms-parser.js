@@ -37,7 +37,7 @@ export function parseCardSms(text, now = new Date()) {
   const multiple = cardIdxs.length > 1;
   const block = lines.slice(cardIdxs[0], multiple ? cardIdxs[1] : lines.length);
 
-  const [, cardName, cardDigits, approval] = block[0].match(CARD_LINE_RE);
+  const [, , cardDigits, approval] = block[0].match(CARD_LINE_RE);
   const txType = approval === '승인취소' ? 'cancel' : 'approval';
 
   let amount = null;
@@ -91,5 +91,5 @@ export function parseCardSms(text, now = new Date()) {
     break;
   }
 
-  return { ok: true, txType, cardName, cardDigits, amount, installment, date, time, merchant, multiple };
+  return { ok: true, txType, cardDigits, amount, installment, date, time, merchant, multiple };
 }

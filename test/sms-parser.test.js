@@ -24,7 +24,6 @@ test('기본 승인 문자 파싱', () => {
   const p = parseCardSms(SAMPLE, NOW);
   assert.equal(p.ok, true);
   assert.equal(p.txType, 'approval');
-  assert.equal(p.cardName, 'BC바로');
   assert.equal(p.cardDigits, '0904');
   assert.equal(p.amount, 1600);
   assert.equal(p.date, '2026-06-29');

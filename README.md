@@ -1,6 +1,6 @@
 # 장부장 (teambi-agent)
 
-Teams **단체 채팅**에 앱을 설치한 뒤 @장부장으로 카드 승인 문자와 자연어 요청을 보내면 팀비 지출을 기록·수정·삭제하고 잔액을 알려주는 Bot 앱입니다.
+Teams **단체 채팅**에 앱을 설치한 뒤 @장부장으로 카드 승인 문자와 자연어 요청을 보내면 팀비 지출을 기록·수정·삭제하고 잔액을 알려주는 Bot 앱입니다. Node.js 22+가 필요합니다.
 
 ~~~
 Teams 단체 채팅 ── @장부장 ──▶ Teams Bot (/api/messages) ──▶ teamMoneyManager REST API
@@ -22,7 +22,6 @@ cp .env.example .env
 | MicrosoftAppId | Teams Developer Portal에서 등록한 Bot 앱 ID |
 | MicrosoftAppPassword | 해당 앱의 클라이언트 비밀값 |
 | MicrosoftAppTenantId | Microsoft 365 테넌트 ID |
-| PUBLIC_BASE_URL | Bot의 HTTPS 공개 주소. 예: https://bot.namonak.dev |
 | TEAMS_CARD_MAP | 선택. 예: 3900:1,2903:2 |
 | TEAMS_MEMBER_ALIASES | 선택. 예: 홍길동=홍실장,실장님 |
 | GEMINI_API_KEY 또는 OPENROUTER_API_KEY | 선택. 자연어 처리용 |
@@ -36,7 +35,7 @@ HTTPS 프록시에서 /api/messages와 /health를 localhost:49877로 전달해�
 
 ## Teams Bot 앱 등록
 
-1. Teams Developer Portal에서 Bot 앱을 만들고 Messaging endpoint를 PUBLIC_BASE_URL/api/messages로 설정합니다.
+1. Teams Developer Portal에서 Bot 앱을 만들고 Messaging endpoint를 `https://<공개주소>/api/messages`로 설정합니다.
 2. 발급받은 앱 ID·비밀값·테넌트 ID를 .env에 넣고 컨테이너를 재생성합니다.
 3. appPackage/manifest.json의 validDomains를 실제 공개 도메인으로 맞춥니다.
 4. 앱 패키지를 만듭니다.

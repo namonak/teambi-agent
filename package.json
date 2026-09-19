@@ -1,7 +1,7 @@
 {
   "name": "teambi-agent",
   "version": "0.1.0",
-  "description": "장부장 — Teams 채널의 카드 승인 문자·자연어 메시지로 팀비 지출을 자동 기입하는 AI Agent",
+  "description": "장부장 — Teams 단체 채팅의 카드 승인 문자·자연어 메시지로 팀비 지출을 자동 기입하는 Bot 앱",
   "type": "module",
   "license": "MIT",
   "engines": {
