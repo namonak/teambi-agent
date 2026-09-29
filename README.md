@@ -19,9 +19,7 @@ cp .env.example .env
 | 변수 | 값 |
 | --- | --- |
 | TMM_BASE_URL, TMM_PASSWORD | teamMoneyManager 주소와 로그인 비밀번호 |
-| MicrosoftAppId | Teams Developer Portal에서 등록한 Bot 앱 ID |
-| MicrosoftAppPassword | 해당 앱의 클라이언트 비밀값 |
-| MicrosoftAppTenantId | Microsoft 365 테넌트 ID |
+| MicrosoftAppId, MicrosoftAppPassword, MicrosoftAppTenantId | 아래 Teams Developer CLI 등록 명령이 자동으로 기록 |
 | TEAMS_CARD_MAP | 선택. 예: 3900:1,2903:2 |
 | TEAMS_MEMBER_ALIASES | 선택. 예: 홍길동=홍실장,실장님 |
 | GEMINI_API_KEY 또는 OPENROUTER_API_KEY | 선택. 자연어 처리용 |
@@ -35,16 +33,37 @@ HTTPS 프록시에서 /api/messages와 /health를 localhost:49877로 전달해�
 
 ## Teams Bot 앱 등록
 
-1. Teams Developer Portal에서 Bot 앱을 만들고 Messaging endpoint를 `https://<공개주소>/api/messages`로 설정합니다.
-2. 발급받은 앱 ID·비밀값·테넌트 ID를 .env에 넣고 컨테이너를 재생성합니다.
-3. appPackage/manifest.json의 validDomains를 실제 공개 도메인으로 맞춥니다.
+`team-meal-bot`과 동일하게 Teams Developer CLI가 Bot 등록과 Microsoft 앱 자격 증명 생성을 처리합니다. 먼저 서버를 HTTPS 공개 주소에서 실행하고, 해당 주소의 `/api/messages`가 외부에서 접근되는지 확인하세요.
+
+1. Teams Developer CLI를 설치하고 Microsoft 365 계정으로 로그인합니다.
+
+   ~~~
+   npm install -g @microsoft/teams.cli
+   teams login
+   teams status
+   ~~~
+
+   `teams status`의 `Sideloading`이 `enabled`여야 테스트 앱을 설치할 수 있습니다. `disabled`면 Microsoft 365 관리자에게 커스텀 앱 업로드 권한을 요청하세요.
+
+2. 프로젝트 최상단에서 Bot을 등록합니다. 이 명령은 `.env`에 `MicrosoftAppId`, `MicrosoftAppPassword`, `MicrosoftAppTenantId`를 기록하고, Messaging endpoint를 연결합니다.
+
+   ~~~
+   teams app create \
+     --name teambi-agent \
+     --endpoint https://<공개-도메인>/api/messages \
+     --env .env
+   ~~~
+
+   기존 `.env`에는 `TMM_BASE_URL`, `TMM_PASSWORD`, AI 키 등도 함께 채워 둡니다.
+
+3. `appPackage/manifest.json`의 `validDomains`를 실제 공개 도메인으로 맞춥니다.
 4. 앱 패키지를 만듭니다.
 
    ~~~
    bash scripts/package-teams-app.sh
    ~~~
 
-5. 생성된 dist/teambi-agent-YYYYMMDD-HHMMSS.zip을 Teams에 업로드하고, 사용할 단체 채팅에 앱을 추가합니다.
+5. 생성된 `dist/teambi-agent-YYYYMMDD-HHMMSS.zip`을 Teams Developer Portal에서 업로드하고, 사용할 단체 채팅에 앱을 추가합니다.
 6. 해당 대화방에서 @장부장 이번 달 커피 잔액 알려줘처럼 호출합니다.
 
 color.png은 제공한 장부장 이미지, outline.png은 Teams 앱 목록용 단색 윤곽 아이콘입니다. ZIP에는 앱 ID와 아이콘만 들어가며 비밀값은 포함되지 않습니다.
