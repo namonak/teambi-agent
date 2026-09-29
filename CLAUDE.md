@@ -49,7 +49,7 @@
 ### 핵심 규칙
 
 - **비밀값 커밋 금지** — public repo. 비밀번호·API 키·Microsoft App 비밀값·내부 URL은 `.env`로만 관리 (`.env.example`에 placeholder만)
-- **자연어 응답** — 먼저 접수하고 같은 groupChat에 사후 결과를 보낸다. SDK `maxRetries: 0` 유지
+- **자연어 응답** — 처리 완료 뒤 같은 groupChat에 결과를 보낸다. SDK `maxRetries: 0` 유지
 - **teamMoneyManager 수정 금지** — 모든 데이터 조작은 REST API 경유 (당월만 기입 가능한 앱 정책 준수)
 - **회신은 채널에 그대로 노출** — 사용자 대면 한국어 문구, 원시 에러 코드 노출 금지
 

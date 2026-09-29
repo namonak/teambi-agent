@@ -147,8 +147,7 @@ async function processNlAsync(text, speaker) {
 }
 
 // --- Teams Bot 메시지 처리 -------------------------------------------------
-// 자연어는 즉시 접수 응답 뒤에 followUp으로 처리한다. Bot adapter가 그 결과를
-// 원래 대화 참조로 능동 전송한다.
+// 자연어는 followUp으로 처리한다. Bot adapter가 그 결과를 원래 대화 참조로 능동 전송한다.
 export function createMessageProcessor() {
   const cardMap = parseCardMap(process.env.TEAMS_CARD_MAP);
 
@@ -182,7 +181,7 @@ export function createMessageProcessor() {
       } else {
         // Teams from.name의 실제 형식을 실서버 로그로 확정하기 위한 1줄(본문·금액은 남기지 않는다).
         console.info('[message-processor] 발화자 from.name=%j', speaker);
-        reply = '⏳ 접수했어요! 처리가 끝나면 결과를 이 대화방에 알려드릴게요.';
+        reply = '';
         dedupeSet(id, { state: 'done', reply });
         return { reply, followUp: () => processNlAsync(text, speaker) };
       }

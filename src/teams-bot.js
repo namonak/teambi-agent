@@ -20,7 +20,7 @@ class TeambiBot extends ActivityHandler {
       if (!isBotMention(context.activity)) return next();
       context.activity.removeRecipientMention();
       const outcome = await processMessage(context.activity);
-      await context.sendActivity({ type: 'message', text: outcome.reply, textFormat: 'markdown' });
+      if (outcome.reply) await context.sendActivity({ type: 'message', text: outcome.reply, textFormat: 'markdown' });
       if (outcome.followUp) {
         const reference = context.activity.getConversationReference();
         outcome.followUp()

@@ -34,7 +34,7 @@ const server = app.listen(PORT, () => {
   for (const note of llm.notes) console.warn(`[teambi-agent] ⚠️ ${note}`);
   if (llm.configured) console.log(`[teambi-agent] 🧠 자연어 처리: ${llm.name} · 모델 ${llm.model}`);
   else console.warn(`[teambi-agent] ℹ️ ${llm.hint} 미설정 — 자연어 처리는 비활성(정형 SMS만 동작)`);
-  if (teamsBot) console.log('[teambi-agent] 🤖 Teams Bot: 그룹 채팅 멘션 수신 · 자연어 즉시 접수 → 사후 응답');
+  if (teamsBot) console.log('[teambi-agent] 🤖 Teams Bot: 그룹 채팅 멘션 수신 · 자연어 비동기 처리 → 결과 응답');
 
   // 세션 없는 첫 요청은 로그인 왕복까지 물어 준비에만 1.8초를 쓴다(측정값).
   // 첫 요청 지연을 줄이기 위해 미리 만들어 둔다.

@@ -67,7 +67,7 @@ const speakerLine = (system) => system.split('\n').find((line) => line.startsWit
 
 async function followUpFor(activity) {
   const outcome = await processor({ type: 'message', ...activity });
-  assert.match(outcome.reply, /접수했어요/);
+  assert.equal(outcome.reply, '');
   assert.equal(typeof outcome.followUp, 'function');
   return outcome.followUp();
 }
