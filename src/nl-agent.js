@@ -11,6 +11,44 @@ import { todayStr, fmtWon } from './util.js';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const MAX_ROUNDS = 3;
+const BALANCE_RE = /잔액|남았|남아|남은/;
+
+const compact = (text) => String(text ?? '').replace(/\s+/g, '');
+const hasAmounts = (row, keys) => keys.every((key) => Number.isFinite(row?.[key]));
+
+function balanceQuery(text) {
+  return BALANCE_RE.test(String(text ?? ''));
+}
+
+// 잔액은 숫자 신뢰성이 중요하므로 LLM이 아닌 dashboard 값으로 바로 답한다.
+export function balanceReplyFor(text, toolkit) {
+  if (!balanceQuery(text)) return null;
+  const categories = toolkit.categories ?? [];
+  const members = toolkit.members ?? [];
+  const query = compact(text);
+  const categoryMatches = categories.filter((category) => query.includes(compact(category.name)));
+  const memberNames = new Set(members.filter((member) => query.includes(compact(member.name))).map((member) => member.name));
+  for (const [alias, name] of toolkit.aliases ?? []) {
+    if (query.includes(alias)) memberNames.add(name);
+  }
+  const memberMatches = members.filter((member) => memberNames.has(member.name));
+
+  if (categoryMatches.length === 1 && memberMatches.length === 0) {
+    const category = categoryMatches[0];
+    if (!hasAmounts(category, ['allocated', 'used', 'remaining'])) return null;
+    return `📁 ${category.name} 잔액: ${fmtWon(category.remaining)}\n예산 ${fmtWon(category.allocated)} · 사용 ${fmtWon(category.used)}`;
+  }
+  if (memberMatches.length === 1 && categoryMatches.length === 0) {
+    const member = memberMatches[0];
+    if (!hasAmounts(member, ['allocation', 'used', 'remaining'])) return null;
+    return `👤 ${member.name} 개인 잔액: ${fmtWon(member.remaining)}\n할당 ${fmtWon(member.allocation)} · 사용 ${fmtWon(member.used)}`;
+  }
+  if (categoryMatches.length > 0 || memberMatches.length > 0 || !categories.every((category) => hasAmounts(category, ['remaining'])) || !members.every((member) => hasAmounts(member, ['remaining']))) return null;
+
+  const common = categories.reduce((sum, category) => sum + category.remaining, 0);
+  const personal = members.reduce((sum, member) => sum + member.remaining, 0);
+  return `📊 ${toolkit.period} 잔액\n전체 ${fmtWon(common + personal)}\n공용 ${fmtWon(common)} · 개인 ${fmtWon(personal)}`;
+}
 
 // 발화자(Teams from.name) → 프롬프트에 실을 한 줄.
 // 목록에 없는 사람은 이름을 지어내지 말고 "없음"을 명시해야 1인칭 지출을 되묻게 된다.
@@ -100,7 +138,7 @@ export function budgetSummary(spent, remaining) {
 // opts.maxRounds — 라운드 수 (기본 3; 비동기 모드에선 여유 있게)
 // opts.speaker — Teams from.name. 1인칭("제가")을 누구로 볼지의 유일한 근거다.
 export async function runNlAgent(text, deadline, opts = {}) {
-  if (!gemini.configured()) return gemini.setupMessage();
+  if (!gemini.configured() && !balanceQuery(text)) return gemini.setupMessage();
   const maxRounds = opts.maxRounds ?? MAX_ROUNDS;
   const spent = { toolkit: 0, llm: 0, tools: 0, rounds: 0, calls: [] };
   const since = (t) => Date.now() - t;
@@ -113,6 +151,10 @@ export async function runNlAgent(text, deadline, opts = {}) {
     return `⚠️ teamMoneyManager 연결에 실패했어요: ${e.message}`;
   }
   spent.toolkit = since(tToolkit);
+
+  const balanceReply = balanceReplyFor(text, toolkit);
+  if (balanceReply) return balanceReply;
+  if (!gemini.configured()) return gemini.setupMessage();
 
   // Teams from.name의 실제 형식이 환경마다 달라(영문 표시명·부서 접미 등) 해석 결과를
   // 요청당 1줄 남긴다. 본문·금액은 담지 않는다.

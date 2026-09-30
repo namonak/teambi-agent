@@ -12,6 +12,7 @@ import http from 'node:http';
 let server;
 let createToolkit;
 let buildSystem;
+let balanceReplyFor;
 
 // 테스트별로 dashboard.members를 갈아끼운다 (과거 월·서버 구버전은 []를 준다).
 let dashboardMembers = [
@@ -55,7 +56,7 @@ before(async () => {
   process.env.TMM_BASE_URL = `http://127.0.0.1:${server.address().port}`;
   process.env.TMM_PASSWORD = 'pw';
   ({ createToolkit } = await import('../src/tools.js'));
-  ({ buildSystem } = await import('../src/nl-agent.js'));
+  ({ buildSystem, balanceReplyFor } = await import('../src/nl-agent.js'));
 });
 
 after(() => server.close());
@@ -102,4 +103,26 @@ test('병합 후에도 members[].id가 보존돼 이름 해석이 깨지지 않�
     [11, 12],
     'dashboard의 member_id로 덮어쓰면 resolveByName이 무너진다',
   );
+});
+
+test('잔액 질문은 LLM 없이 전체·카테고리·개인 템플릿으로 답한다', () => {
+  const toolkit = {
+    period: '2026-09',
+    categories: [
+      { name: '커피', allocated: 120000, used: 42700, remaining: 77300 },
+      { name: '회식', allocated: 160000, used: 441100, remaining: -281100 },
+    ],
+    members: [
+      { name: '최정', allocation: 70000, used: 69600, remaining: 400 },
+      { name: '박형진', allocation: 70000, used: 49000, remaining: 21000 },
+    ],
+    aliases: new Map([['박팀장', '박형진']]),
+  };
+
+  for (const text of ['잔액이 얼마야?', '잔액이 얼마에요?', '잔액이 얼마입니까?', '이번 달 예산 얼마나 남았어?']) {
+    assert.equal(balanceReplyFor(text, toolkit), '📊 2026-09 잔액\n전체 -182,400원\n공용 -203,800원 · 개인 21,400원');
+  }
+  assert.equal(balanceReplyFor('커피 얼마나 남았어?', toolkit), '📁 커피 잔액: 77,300원\n예산 120,000원 · 사용 42,700원');
+  assert.equal(balanceReplyFor('박팀장님 잔액은?', toolkit), '👤 박형진 개인 잔액: 21,000원\n할당 70,000원 · 사용 49,000원');
+  assert.equal(balanceReplyFor('커피 3,600원 썼어', toolkit), null);
 });

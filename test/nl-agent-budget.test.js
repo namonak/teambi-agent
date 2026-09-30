@@ -77,7 +77,7 @@ test('예산이 모자라 라운드를 못 돌면 소진 내역을 로그에 남
   let reply;
   try {
     // createToolkit만으로 예산이 바닥나도록 아주 짧은 데드라인을 준다
-    reply = await runNlAgent('이번 달 커피 얼마 남았어?', Date.now() + 50);
+    reply = await runNlAgent('이번 달 카드 사용내역 보여줘', Date.now() + 50);
   } finally {
     console.warn = original;
   }
