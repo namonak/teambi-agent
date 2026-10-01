@@ -98,11 +98,11 @@ const reasoningOptions = () =>
     ? { reasoning: { effort: REASONING_EFFORT, exclude: true } }
     : { reasoning_effort: REASONING_EFFORT };
 
-export async function call({ messages, tools, timeout }) {
+export async function call({ messages, tools, maxTokens = 1024, timeout }) {
   const resp = await getClient().chat.completions.create(
     {
       model: MODEL,
-      max_tokens: 1024,
+      max_tokens: maxTokens,
       messages,
       tools,
       tool_choice: 'auto',

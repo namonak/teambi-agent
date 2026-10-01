@@ -11,6 +11,7 @@ import { todayStr } from './util.js';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const MAX_ROUNDS = 3;
+const MAX_RESPONSE_TOKENS = 256;
 
 // 발화자(Teams from.name) → 프롬프트에 실을 한 줄.
 // 목록에 없는 사람은 이름을 지어내지 말고 "없음"을 명시해야 1인칭 지출을 되묻게 된다.
@@ -56,6 +57,9 @@ ${memberLines || '- (없음)'}
 발화자(이 메시지를 보낸 사람): ${speakerLine}
 
 규칙:
+- teamMoneyManager 팀비 관리(잔액 조회, 지출 등록·수정·삭제, 내역 확인) 외 요청에는 도구를 호출하지 말고 아래 두 줄만 그대로 답한다:
+  장부장은 teamMoneyManager 연동 팀비 관리만 도와드릴 수 있어요.
+  잔액 조회, 지출 등록·수정·삭제, 내역 확인을 말씀해 주세요.
 - 잔액·남은 예산 질문에는 반드시 get_balance를 호출한다. 숫자를 직접 계산하거나 추측하지 마라. "저/제가/나/내/제"의 잔액은 scope=self로 호출한다.
 - list_categories는 기입/수정/삭제를 실행한 직후 갱신된 잔액을 확인할 때만 호출한다. 그 외에는 절대 부르지 마라.
 - 조회 질문(내역 확인 등)은 필요한 도구를 첫 응답에서 병렬로 모두 호출하고, 결과를 받으면 추가 조회 없이 바로 최종 답변을 작성한다. 도구를 한 번에 하나씩 나눠 부르면 시간 안에 끝나지 않는다.
@@ -123,7 +127,7 @@ export async function runNlAgent(text, deadline, opts = {}) {
     let resp;
     const tLlm = Date.now();
     try {
-      resp = await gemini.call({ system, messages, tools, timeout: remaining });
+      resp = await gemini.call({ system, messages, tools, maxTokens: MAX_RESPONSE_TOKENS, timeout: remaining });
     } catch (e) {
       spent.llm += since(tLlm);
       // 원문은 채널에 노출하지 않고 로그에만 남긴다(어느 한도를 넘겼는지 등은 로그로 확인).

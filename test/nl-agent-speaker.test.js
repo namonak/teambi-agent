@@ -122,6 +122,8 @@ test('1인칭·호칭 규칙이 프롬프트에 들어 있다', async () => {
   // 라운드를 아끼는 기존 규칙이 함께 남아 있어야 한다(예산 회귀 방지).
   assert.match(sys, /list_categories는 기입\/수정\/삭제를 실행한 직후/);
   assert.match(sys, /잔액·남은 예산 질문에는 반드시 get_balance/);
+  assert.match(sys, /teamMoneyManager 팀비 관리.*외 요청에는 도구를 호출하지 말고/);
+  assert.match(sys, /장부장은 teamMoneyManager 연동 팀비 관리만 도와드릴 수 있어요/);
 });
 
 test('별칭이 없으면 팀원 줄에 [호칭]이 붙지 않는다', async () => {

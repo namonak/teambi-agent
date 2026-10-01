@@ -49,6 +49,18 @@ test('call: thinking을 낮추는 reasoning_effort를 함께 보낸다', async (
   assert.equal(received[0].body.reasoning_effort, 'minimal');
 });
 
+test('call: 호출자가 지정한 출력 토큰 상한을 보낸다', async () => {
+  received.length = 0;
+  await gemini.call({
+    messages: [{ role: 'user', content: '안녕' }],
+    tools: [],
+    maxTokens: 256,
+    timeout: 5000,
+  });
+  assert.equal(received.length, 1);
+  assert.equal(received[0].body.max_tokens, 256);
+});
+
 test('simpleText: 분류 폴백 호출에도 reasoning_effort를 보낸다', async () => {
   received.length = 0;
   const text = await gemini.simpleText({

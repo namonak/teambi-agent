@@ -114,4 +114,5 @@ test('Bot 사후 처리: 저의 잔액은 도구 결과를 바로 회신하고 L
     '👤 홍길동 개인 잔액: 128,000원\n할당 180,000원 · 사용 52,000원',
   );
   assert.equal(llmRequests.length, 1, '도구 결과를 다시 LLM에 맡겨 계산·재서술하지 않는다');
+  assert.equal(llmRequests[0].max_tokens, 256, '자연어 해석은 작은 출력 예산으로 제한한다');
 });
