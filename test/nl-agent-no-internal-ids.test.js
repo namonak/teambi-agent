@@ -90,12 +90,12 @@ test('시스템 프롬프트 어디에도 내부 id가 실리지 않는다 (잔�
   }
 });
 
-test('팀원·카테고리 줄은 이름과 금액만 담는다', async () => {
+test('팀원·카테고리 줄은 이름만 담고 금액은 잔액 도구에 맡긴다', async () => {
   const tk = await createToolkit();
   const sys = buildSystem(tk, { speaker: '홍길동' });
   const lines = sys.split('\n');
-  assert.equal(lines.find((l) => l.startsWith('- 홍길동')), '- 홍길동: 잔액 128,000원 / 180,000원');
-  assert.equal(lines.find((l) => l.startsWith('- 커피')), '- 커피: 잔액 128,000원 / 200,000원');
+  assert.equal(lines.find((l) => l.startsWith('- 홍길동')), '- 홍길동');
+  assert.equal(lines.find((l) => l.startsWith('- 커피')), '- 커피');
   assert.equal(
     lines.find((l) => l.startsWith('발화자')),
     '발화자(이 메시지를 보낸 사람): 홍길동',

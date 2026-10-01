@@ -6,6 +6,7 @@ import http from 'node:http';
 let server;
 let processor;
 const systemPrompts = [];
+const llmRequests = [];
 const envBackup = {};
 const setEnv = (k, v) => {
   envBackup[k] = process.env[k];
@@ -32,7 +33,22 @@ const server_ = http.createServer((req, res) => {
     if (req.url.startsWith('/api/members')) return send({ members: [{ id: 11, name: '홍길동', active: 1 }] });
     if (req.url.endsWith('/chat/completions')) {
       const parsed = JSON.parse(body);
+      llmRequests.push(parsed);
       systemPrompts.push(parsed.messages.find((message) => message.role === 'system')?.content ?? '');
+      if (parsed.messages.at(-1)?.role === 'user' && parsed.messages.at(-1)?.content === '저의 잔액을 알려주세요.') {
+        return send({
+          id: 'test', object: 'chat.completion', created: 0, model: 'fake',
+          choices: [{
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{ id: 'balance-1', type: 'function', function: { name: 'get_balance', arguments: '{"scope":"self"}' } }],
+            },
+            finish_reason: 'tool_calls',
+          }],
+        });
+      }
       return send({
         id: 'test', object: 'chat.completion', created: 0, model: 'fake',
         choices: [{ index: 0, message: { role: 'assistant', content: '✅ 확인했어요.' }, finish_reason: 'stop' }],
@@ -88,4 +104,14 @@ test('Bot 사후 처리: from.name이 없으면 이름을 지어내지 않는다
   systemPrompts.length = 0;
   await followUpFor({ id: 'bot-speaker-3', text: '커피 4,500원 기입해줘', from: { id: 'u3' } });
   assert.equal(speakerLine(systemPrompts.at(-1)), '발화자(이 메시지를 보낸 사람): (알 수 없음)');
+});
+
+test('Bot 사후 처리: 저의 잔액은 도구 결과를 바로 회신하고 LLM 재서술을 생략한다', async () => {
+  systemPrompts.length = 0;
+  llmRequests.length = 0;
+  assert.equal(
+    await followUpFor({ id: 'bot-speaker-balance', text: '저의 잔액을 알려주세요.', from: { id: 'u1', name: '홍길동 (Hong Gildong)' } }),
+    '👤 홍길동 개인 잔액: 128,000원\n할당 180,000원 · 사용 52,000원',
+  );
+  assert.equal(llmRequests.length, 1, '도구 결과를 다시 LLM에 맡겨 계산·재서술하지 않는다');
 });

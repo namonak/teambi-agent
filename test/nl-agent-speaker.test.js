@@ -121,7 +121,7 @@ test('1인칭·호칭 규칙이 프롬프트에 들어 있다', async () => {
   assert.match(sys, /추측하지 말고 누구인지 되묻는다/);
   // 라운드를 아끼는 기존 규칙이 함께 남아 있어야 한다(예산 회귀 방지).
   assert.match(sys, /list_categories는 기입\/수정\/삭제를 실행한 직후/);
-  assert.match(sys, /잔액·팀원 질문은 공용·개인 모두 도구 없이/);
+  assert.match(sys, /잔액·남은 예산 질문에는 반드시 get_balance/);
 });
 
 test('별칭이 없으면 팀원 줄에 [호칭]이 붙지 않는다', async () => {
@@ -137,9 +137,9 @@ test('별칭이 있으면 팀원 줄에 원문 호칭이 붙는다 (내부 키�
     const tk = await createToolkit();
     const sys = buildSystem(tk, { speaker: '홍길동' });
     const line = sys.split('\n').find((l) => l.startsWith('- 홍길동'));
-    assert.equal(line, '- 홍길동: 잔액 128,000원 / 180,000원 [호칭: 실장님, 홍실장]');
+    assert.equal(line, '- 홍길동 [호칭: 실장님, 홍실장]');
     const other = sys.split('\n').find((l) => l.startsWith('- 김철수'));
-    assert.equal(other, '- 김철수: 잔액 180,000원 / 180,000원', '별칭 없는 팀원은 그대로');
+    assert.equal(other, '- 김철수', '별칭 없는 팀원은 그대로');
   } finally {
     delete process.env.TEAMS_MEMBER_ALIASES;
   }

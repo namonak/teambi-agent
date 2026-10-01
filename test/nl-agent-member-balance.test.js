@@ -1,10 +1,4 @@
-// nl-agent-member-balance.test.js — 팀원별 개인 잔액이 시스템 프롬프트까지 실려 나가는지.
-//
-// /api/dashboard는 members[](member_id + 금액)로 개인 잔액을 이미 내려주는데,
-// createToolkit이 categories만 꺼내 쓰는 바람에 모델은 개인 잔액을 본 적이 없었다.
-// 게다가 규칙이 잔액 질문에 도구 호출을 금지해(라운드 절약) 조회 우회로도 없었다.
-// 그래서 "홍길동 잔액 얼마야?"에 "확인할 수 없다"고 답했다.
-// 신규 도구 없이(=라운드 추가 없이) 프롬프트 선주입으로 해결한 것이 여기서 검증하는 경로다.
+// nl-agent-member-balance.test.js — 잔액은 LLM이 해석하되, 실제 금액은 도구가 확정한다.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -12,7 +6,6 @@ import http from 'node:http';
 let server;
 let createToolkit;
 let buildSystem;
-let balanceReplyFor;
 
 // 테스트별로 dashboard.members를 갈아끼운다 (과거 월·서버 구버전은 []를 준다).
 let dashboardMembers = [
@@ -56,7 +49,7 @@ before(async () => {
   process.env.TMM_BASE_URL = `http://127.0.0.1:${server.address().port}`;
   process.env.TMM_PASSWORD = 'pw';
   ({ createToolkit } = await import('../src/tools.js'));
-  ({ buildSystem, balanceReplyFor } = await import('../src/nl-agent.js'));
+  ({ buildSystem } = await import('../src/nl-agent.js'));
 });
 
 after(() => server.close());
@@ -69,17 +62,14 @@ test('createToolkit이 dashboard.members의 개인 잔액을 팀원 배열에 �
   assert.equal(hong.used, 52000);
 });
 
-test('시스템 프롬프트에 팀원 이름과 잔액이 같은 줄에 실린다', async () => {
+test('시스템 프롬프트에는 이름만 싣고 잔액 조회 도구 사용을 지시한다', async () => {
   const tk = await createToolkit();
   const sys = buildSystem(tk);
   const line = sys.split('\n').find((l) => l.includes('홍길동'));
   assert.ok(line, '팀원 줄이 있어야 한다');
-  assert.match(line, /128,000원/, '이름과 잔액이 붙어 있어야 모델이 연결한다');
-  assert.match(line, /180,000원/, '배정액도 같이 보여 준다');
-  assert.ok(
-    sys.split('\n').find((l) => l.includes('김철수'))?.includes('180,000원'),
-    '팀원마다 한 줄씩 나와야 한다',
-  );
+  assert.equal(line, '- 홍길동');
+  assert.doesNotMatch(sys, /128,000원|180,000원/);
+  assert.match(sys, /잔액·남은 예산 질문에는 반드시 get_balance/);
 });
 
 test('dashboard.members가 비어도 예외 없이 이름만으로 렌더된다', async () => {
@@ -105,24 +95,27 @@ test('병합 후에도 members[].id가 보존돼 이름 해석이 깨지지 않�
   );
 });
 
-test('잔액 질문은 LLM 없이 전체·카테고리·개인 템플릿으로 답한다', () => {
-  const toolkit = {
-    period: '2026-09',
-    categories: [
-      { name: '커피', allocated: 120000, used: 42700, remaining: 77300 },
-      { name: '회식', allocated: 160000, used: 441100, remaining: -281100 },
-    ],
-    members: [
-      { name: '최정', allocation: 70000, used: 69600, remaining: 400 },
-      { name: '박형진', allocation: 70000, used: 49000, remaining: 21000 },
-    ],
-    aliases: new Map([['박팀장', '박형진']]),
-  };
+test('get_balance가 전체·카테고리·개인·발화자 잔액을 확정 응답으로 반환한다', async () => {
+  const tk = await createToolkit({ speaker: '홍길동 (Hong Gildong)' });
 
-  for (const text of ['잔액이 얼마야?', '잔액이 얼마에요?', '잔액이 얼마입니까?', '이번 달 예산 얼마나 남았어?']) {
-    assert.equal(balanceReplyFor(text, toolkit), '📊 2026-09 잔액\n전체 -182,400원\n공용 -203,800원 · 개인 21,400원');
-  }
-  assert.equal(balanceReplyFor('커피 얼마나 남았어?', toolkit), '📁 커피 잔액: 77,300원\n예산 120,000원 · 사용 42,700원');
-  assert.equal(balanceReplyFor('박팀장님 잔액은?', toolkit), '👤 박형진 개인 잔액: 21,000원\n할당 70,000원 · 사용 49,000원');
-  assert.equal(balanceReplyFor('커피 3,600원 썼어', toolkit), null);
+  assert.deepEqual(await tk.run('get_balance', { scope: 'total' }), {
+    content: `📊 ${tk.period} 잔액\n전체 436,000원\n공용 128,000원 · 개인 308,000원`,
+    is_error: false,
+    final: true,
+  });
+  assert.deepEqual(await tk.run('get_balance', { scope: 'category', name: '커피' }), {
+    content: '📁 커피 잔액: 128,000원\n예산 200,000원 · 사용 72,000원',
+    is_error: false,
+    final: true,
+  });
+  assert.deepEqual(await tk.run('get_balance', { scope: 'member', name: '김철수' }), {
+    content: '👤 김철수 개인 잔액: 180,000원\n할당 180,000원 · 사용 0원',
+    is_error: false,
+    final: true,
+  });
+  assert.deepEqual(await tk.run('get_balance', { scope: 'self' }), {
+    content: '👤 홍길동 개인 잔액: 128,000원\n할당 180,000원 · 사용 52,000원',
+    is_error: false,
+    final: true,
+  });
 });

@@ -1,4 +1,4 @@
-// tools.js — 자연어 처리용 LLM 도구 5종. 모든 실행은 tmm-client(REST) 위임.
+// tools.js — 자연어 처리용 LLM 도구 6종. 모든 실행은 tmm-client(REST) 위임.
 // 도구 실행 결과는 tool_result 문자열로 반환하고, 기입/수정/삭제는 sideEffects에 기록해
 // 타임아웃 시에도 "지금까지 처리된 것"을 정직하게 회신할 수 있게 한다.
 import * as tmm from './tmm-client.js';
@@ -7,6 +7,19 @@ import { currentPeriod, todayStr, fmtWon, cardLabel, parseMemberAliases } from '
 import { matchMembers } from './names.js';
 
 const TOOL_DEFS = [
+  {
+    name: 'get_balance',
+    description: 'teamMoneyManager의 당월 잔액을 조회한다. 잔액·남은 예산 질문에는 반드시 호출한다.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        scope: { type: 'string', enum: ['total', 'category', 'member', 'self'], description: '전체, 공용 카테고리, 특정 팀원, 발화자 본인 중 조회 대상' },
+        name: { type: 'string', description: 'category 또는 member일 때의 이름' },
+      },
+      required: ['scope'],
+      additionalProperties: false,
+    },
+  },
   {
     name: 'list_categories',
     description: '당월 공용 카테고리 목록과 예산/사용액/잔액을 조회한다.',
@@ -92,7 +105,7 @@ function resolveByName(list, name, label, matches = substringMatch) {
   throw new Error(`${label} '${name}'이(가) 모호함. 후보: ${found.map((x) => x.name).join(', ')}`);
 }
 
-export async function createToolkit() {
+export async function createToolkit({ speaker } = {}) {
   const period = currentPeriod();
   // 시스템 프롬프트 선주입용 + 이름 해석용으로 미리 로드
   const [dashboard, membersRes] = await Promise.all([tmm.getDashboard(period), tmm.getMembers()]);
@@ -121,7 +134,39 @@ export async function createToolkit() {
   }
   const aliasesOf = (name) => labelsOf.get(name) ?? [];
   const resolveMember = (name) => resolveByName(members, name, '팀원', (list, ref) => matchMembers(list, ref, aliases));
+  const speakerMatches = speaker ? matchMembers(members, speaker, aliases) : [];
+  const speakerMember = speakerMatches.length === 1 ? speakerMatches[0] : null;
   const sideEffects = []; // {action, id, summary}
+
+  const hasAmounts = (row, keys) => keys.every((key) => Number.isFinite(row?.[key]));
+  const memberBalance = (member) => {
+    if (!hasAmounts(member, ['allocation', 'used', 'remaining'])) throw new Error(`${member.name}의 당월 개인 잔액을 확인할 수 없음`);
+    return `👤 ${member.name} 개인 잔액: ${fmtWon(member.remaining)}\n할당 ${fmtWon(member.allocation)} · 사용 ${fmtWon(member.used)}`;
+  };
+  const balanceReply = ({ scope, name }) => {
+    switch (scope) {
+      case 'total': {
+        if (![...categories, ...members].every((row) => hasAmounts(row, ['remaining']))) throw new Error('당월 잔액 데이터를 확인할 수 없음');
+        const common = categories.reduce((sum, category) => sum + category.remaining, 0);
+        const personal = members.reduce((sum, member) => sum + member.remaining, 0);
+        return `📊 ${period} 잔액\n전체 ${fmtWon(common + personal)}\n공용 ${fmtWon(common)} · 개인 ${fmtWon(personal)}`;
+      }
+      case 'category': {
+        if (!name) throw new Error('조회할 카테고리 이름이 필요함');
+        const category = resolveByName(categories, name, '카테고리');
+        if (!hasAmounts(category, ['allocated', 'used', 'remaining'])) throw new Error(`${category.name}의 당월 잔액을 확인할 수 없음`);
+        return `📁 ${category.name} 잔액: ${fmtWon(category.remaining)}\n예산 ${fmtWon(category.allocated)} · 사용 ${fmtWon(category.used)}`;
+      }
+      case 'member':
+        if (!name) throw new Error('조회할 팀원 이름이 필요함');
+        return memberBalance(resolveMember(name));
+      case 'self':
+        if (!speakerMember) throw new Error('발화자를 팀원으로 특정할 수 없음');
+        return memberBalance(speakerMember);
+      default:
+        throw new Error('잔액 조회 대상이 올바르지 않음');
+    }
+  };
 
   async function findTx(id) {
     const { transactions } = await tmm.listTransactions({ period });
@@ -170,6 +215,8 @@ export async function createToolkit() {
   async function run(name, input) {
     try {
       switch (name) {
+        case 'get_balance':
+          return { content: balanceReply(input), is_error: false, final: true };
         case 'list_categories': {
           const d = await tmm.getDashboard(period);
           return { content: JSON.stringify((d.categories ?? []).map(omitInternalIds({ keepId: false })), null, 0), is_error: false };
@@ -210,8 +257,8 @@ export async function createToolkit() {
       // 이 문자열은 tool_result로 LLM에 되돌아간다.
       // 외부 API 오류는 원문을 감추고(상태 코드만), 도구 사용 오류(카테고리 미존재 등)는
       // LLM이 스스로 되묻거나 고쳐 부를 수 있도록 원문을 남긴다.
-      if (e.status) return { content: serviceUserMessage(e), is_error: true };
-      return { content: `오류: ${e.message}`, is_error: true };
+      if (e.status) return { content: serviceUserMessage(e), is_error: true, final: name === 'get_balance' };
+      return { content: `오류: ${e.message}`, is_error: true, final: name === 'get_balance' };
     }
   }
 

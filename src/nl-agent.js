@@ -7,48 +7,10 @@ import * as gemini from './gemini.js';
 import { createToolkit } from './tools.js';
 import { matchMembers } from './names.js';
 import { describeError, llmUserMessage, isConfigError } from './errors.js';
-import { todayStr, fmtWon } from './util.js';
+import { todayStr } from './util.js';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const MAX_ROUNDS = 3;
-const BALANCE_RE = /잔액|남았|남아|남은/;
-
-const compact = (text) => String(text ?? '').replace(/\s+/g, '');
-const hasAmounts = (row, keys) => keys.every((key) => Number.isFinite(row?.[key]));
-
-function balanceQuery(text) {
-  return BALANCE_RE.test(String(text ?? ''));
-}
-
-// 잔액은 숫자 신뢰성이 중요하므로 LLM이 아닌 dashboard 값으로 바로 답한다.
-export function balanceReplyFor(text, toolkit) {
-  if (!balanceQuery(text)) return null;
-  const categories = toolkit.categories ?? [];
-  const members = toolkit.members ?? [];
-  const query = compact(text);
-  const categoryMatches = categories.filter((category) => query.includes(compact(category.name)));
-  const memberNames = new Set(members.filter((member) => query.includes(compact(member.name))).map((member) => member.name));
-  for (const [alias, name] of toolkit.aliases ?? []) {
-    if (query.includes(alias)) memberNames.add(name);
-  }
-  const memberMatches = members.filter((member) => memberNames.has(member.name));
-
-  if (categoryMatches.length === 1 && memberMatches.length === 0) {
-    const category = categoryMatches[0];
-    if (!hasAmounts(category, ['allocated', 'used', 'remaining'])) return null;
-    return `📁 ${category.name} 잔액: ${fmtWon(category.remaining)}\n예산 ${fmtWon(category.allocated)} · 사용 ${fmtWon(category.used)}`;
-  }
-  if (memberMatches.length === 1 && categoryMatches.length === 0) {
-    const member = memberMatches[0];
-    if (!hasAmounts(member, ['allocation', 'used', 'remaining'])) return null;
-    return `👤 ${member.name} 개인 잔액: ${fmtWon(member.remaining)}\n할당 ${fmtWon(member.allocation)} · 사용 ${fmtWon(member.used)}`;
-  }
-  if (categoryMatches.length > 0 || memberMatches.length > 0 || !categories.every((category) => hasAmounts(category, ['remaining'])) || !members.every((member) => hasAmounts(member, ['remaining']))) return null;
-
-  const common = categories.reduce((sum, category) => sum + category.remaining, 0);
-  const personal = members.reduce((sum, member) => sum + member.remaining, 0);
-  return `📊 ${toolkit.period} 잔액\n전체 ${fmtWon(common + personal)}\n공용 ${fmtWon(common)} · 개인 ${fmtWon(personal)}`;
-}
 
 // 발화자(Teams from.name) → 프롬프트에 실을 한 줄.
 // 목록에 없는 사람은 이름을 지어내지 말고 "없음"을 명시해야 1인칭 지출을 되묻게 된다.
@@ -65,23 +27,17 @@ export function speakerLineFor(toolkit, speaker, { withId = false } = {}) {
 }
 
 // export하는 이유는 budgetSummary와 같다 — 프롬프트에 실제로 무엇이 실렸는지
-// (특히 팀원별 개인 잔액·발화자) 테스트에서 직접 확인하기 위해서다.
+// (특히 팀원명·발화자) 테스트에서 직접 확인하기 위해서다.
 export function buildSystem(toolkit, opts = {}) {
   const now = new Date();
   // 팀원·카테고리의 내부 id는 프롬프트에 싣지 않는다. 어떤 도구도 이 id를 인자로 받지 않고
   // (create/update_transaction은 member_name·category_name을 서버에서 이름으로 해석한다),
   // 이름 옆에 붙여 두니 모델이 그대로 베껴 채널 회신에 "○○ 님(id 2)"처럼 노출했다.
-  const catLines = toolkit.categories
-    .map((c) => `- ${c.name}: 잔액 ${fmtWon(c.remaining)} / ${fmtWon(c.allocated)}`)
-    .join('\n');
-  // 개인 잔액(remaining)은 당월 dashboard에서만 병합된다. 없으면 이름만 적는다.
+  const catLines = toolkit.categories.map((c) => `- ${c.name}`).join('\n');
   // 별칭은 .env에 적힌 원문("실장님")을 그대로 보여 준다 — 내부 해석 키("실장")가 아니라.
   const memberLines = toolkit.members
     .map((m) => {
-      const base =
-        m.remaining == null
-          ? `- ${m.name}`
-          : `- ${m.name}: 잔액 ${fmtWon(m.remaining)} / ${fmtWon(m.allocation)}`;
+      const base = `- ${m.name}`;
       const labels = toolkit.aliasesOf?.(m.name) ?? [];
       return labels.length > 0 ? `${base} [호칭: ${labels.join(', ')}]` : base;
     })
@@ -91,16 +47,16 @@ export function buildSystem(toolkit, opts = {}) {
 
 오늘: ${todayStr(now)} (${WEEKDAYS[now.getDay()]}) / 당월: ${toolkit.period}
 
-당월 공용 카테고리(잔액):
+당월 공용 카테고리:
 ${catLines || '- (없음)'}
 
-활성 팀원(개인 잔액):
+활성 팀원:
 ${memberLines || '- (없음)'}
 
 발화자(이 메시지를 보낸 사람): ${speakerLine}
 
 규칙:
-- 위에 적은 공용 카테고리 잔액과 팀원별 개인 잔액은 이번 요청 시점의 최신 값이다. 잔액·팀원 질문은 공용·개인 모두 도구 없이 이 값으로 바로 답한다.
+- 잔액·남은 예산 질문에는 반드시 get_balance를 호출한다. 숫자를 직접 계산하거나 추측하지 마라. "저/제가/나/내/제"의 잔액은 scope=self로 호출한다.
 - list_categories는 기입/수정/삭제를 실행한 직후 갱신된 잔액을 확인할 때만 호출한다. 그 외에는 절대 부르지 마라.
 - 조회 질문(내역 확인 등)은 필요한 도구를 첫 응답에서 병렬로 모두 호출하고, 결과를 받으면 추가 조회 없이 바로 최종 답변을 작성한다. 도구를 한 번에 하나씩 나눠 부르면 시간 안에 끝나지 않는다.
 - 이 앱은 당월 지출만 기입/수정 가능하다. 지난달 요청이면 기입하지 말고 이유를 설명한다.
@@ -138,7 +94,7 @@ export function budgetSummary(spent, remaining) {
 // opts.maxRounds — 라운드 수 (기본 3; 비동기 모드에선 여유 있게)
 // opts.speaker — Teams from.name. 1인칭("제가")을 누구로 볼지의 유일한 근거다.
 export async function runNlAgent(text, deadline, opts = {}) {
-  if (!gemini.configured() && !balanceQuery(text)) return gemini.setupMessage();
+  if (!gemini.configured()) return gemini.setupMessage();
   const maxRounds = opts.maxRounds ?? MAX_ROUNDS;
   const spent = { toolkit: 0, llm: 0, tools: 0, rounds: 0, calls: [] };
   const since = (t) => Date.now() - t;
@@ -146,15 +102,11 @@ export async function runNlAgent(text, deadline, opts = {}) {
   let toolkit;
   const tToolkit = Date.now();
   try {
-    toolkit = await createToolkit();
+    toolkit = await createToolkit({ speaker: opts.speaker });
   } catch (e) {
     return `⚠️ teamMoneyManager 연결에 실패했어요: ${e.message}`;
   }
   spent.toolkit = since(tToolkit);
-
-  const balanceReply = balanceReplyFor(text, toolkit);
-  if (balanceReply) return balanceReply;
-  if (!gemini.configured()) return gemini.setupMessage();
 
   // Teams from.name의 실제 형식이 환경마다 달라(영문 표시명·부서 접미 등) 해석 결과를
   // 요청당 1줄 남긴다. 본문·금액은 담지 않는다.
@@ -194,7 +146,11 @@ export async function runNlAgent(text, deadline, opts = {}) {
     const results = [];
     const tTools = Date.now();
     for (const tc of resp.toolCalls) {
-      const { content, is_error } = await toolkit.run(tc.name, tc.input);
+      const { content, is_error, final } = await toolkit.run(tc.name, tc.input);
+      if (final) {
+        spent.tools += since(tTools);
+        return content;
+      }
       results.push({ id: tc.id, content, is_error });
     }
     spent.tools += since(tTools);
