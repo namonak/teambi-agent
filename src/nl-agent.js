@@ -12,6 +12,9 @@ import { todayStr } from './util.js';
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const MAX_ROUNDS = 3;
 const MAX_RESPONSE_TOKENS = 256;
+const PER_PERSON_RE = /각|씩|인당/;
+const SELF_REF_RE = /(?:^|[\s,，])(?:저(?:는|가|의)?|제(?:는|가|의)?)(?=[\s,，]|$)/;
+const PERSONAL_SPLIT_WARNING = '⚠️ 인원별 개인 지출을 확인하지 못해 등록하지 않았어요.\n대상별 개인 지출인지 확인해 다시 요청해 주세요.';
 
 // 발화자(Teams from.name) → 프롬프트에 실을 한 줄.
 // 목록에 없는 사람은 이름을 지어내지 말고 "없음"을 명시해야 1인칭 지출을 되묻게 된다.
@@ -67,6 +70,7 @@ ${memberLines || '- (없음)'}
 - "어제", "그저께" 같은 상대 날짜는 오늘 기준으로 해석한다.
 - 수정/삭제는 반드시 list_recent_transactions로 대상을 특정한 뒤 실행한다. 특정이 안 되면 실행하지 말고 후보를 보여주며 되묻는다.
 - 카테고리 이름의 지출(회식, 커피 등)은 kind=common, 특정 팀원 개인 지출은 kind=personal.
+- 팀원 이름이 둘 이상 나열되고 "각", "씩", "인당"으로 같은 금액을 말하면 인원별 개인 지출이다. 사람마다 create_transaction을 한 번씩 호출해 kind=personal과 member_name을 넣고 category_name은 넣지 마라. 예: "박형진 팀장님, 이태호, 저 11,500원씩"은 세 명의 개인 지출이다.
 - 사용자가 카드를 말하지 않으면 card는 생략한다.
 - "저/제가/나/내/제" 같은 1인칭은 발화자 본인이다. 발화자가 팀원 목록에 있으면 그 이름을 member_name에 넣는다.
 - 발화자가 팀원 목록에 없거나 특정되지 않으면 1인칭 지출은 기입하지 말고 누구의 지출인지 되묻는다. 다른 팀원 이름으로 추측해 기입하지 마라.
@@ -79,6 +83,37 @@ ${memberLines || '- (없음)'}
 function sideEffectsSummary(sideEffects) {
   if (sideEffects.length === 0) return '';
   return `\n지금까지 처리된 것:\n${sideEffects.map((s) => `- ${s.action}: ${s.summary}`).join('\n')}`;
+}
+
+function personalSplitTargets(text, toolkit, speaker) {
+  if (!PER_PERSON_RE.test(text)) return null;
+  const compact = String(text).replace(/\s+/g, '');
+  const targets = new Set(toolkit.members.filter((member) => compact.includes(member.name.replace(/\s+/g, ''))).map((member) => member.name));
+  for (const [alias, name] of toolkit.aliases) {
+    if (compact.includes(alias)) targets.add(name);
+  }
+  if (SELF_REF_RE.test(text)) {
+    const found = matchMembers(toolkit.members, speaker, toolkit.aliases);
+    if (found.length !== 1) return null;
+    targets.add(found[0].name);
+  }
+  return targets.size >= 2 ? targets : null;
+}
+
+function blockInvalidPersonalSplit(text, toolkit, speaker, toolCalls) {
+  const expected = personalSplitTargets(text, toolkit, speaker);
+  if (!expected) return null;
+  const creates = toolCalls.filter((call) => call.name === 'create_transaction');
+  if (creates.length === 0) return null;
+  const actual = new Set();
+  for (const call of creates) {
+    if (call.input.kind !== 'personal' || call.input.category_name || !call.input.member_name) return PERSONAL_SPLIT_WARNING;
+    const found = matchMembers(toolkit.members, call.input.member_name, toolkit.aliases);
+    if (found.length !== 1 || !expected.has(found[0].name)) return PERSONAL_SPLIT_WARNING;
+    actual.add(found[0].name);
+  }
+  if (actual.size !== expected.size || [...expected].some((name) => !actual.has(name))) return PERSONAL_SPLIT_WARNING;
+  return null;
 }
 
 // 타임아웃 시 어느 구간이 예산을 먹었는지 로그 한 줄로 남긴다.
@@ -145,6 +180,8 @@ export async function runNlAgent(text, deadline, opts = {}) {
     }
 
     spent.calls.push(resp.toolCalls.map((tc) => tc.name));
+    const blocked = blockInvalidPersonalSplit(text, toolkit, opts.speaker, resp.toolCalls);
+    if (blocked) return blocked;
 
     gemini.appendAssistant(messages, resp.assistant);
     const results = [];

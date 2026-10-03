@@ -88,6 +88,26 @@ test('팀원 이름으로 개인 지출을 기입할 수 있다 (list_members �
   assert.equal(lastCreateBody.period_category_id, null, '개인 지출은 카테고리를 비운다');
 });
 
+test('공용 종류에 팀원을 함께 지정하면 저장하지 않고 거절한다', async () => {
+  const tk = await createToolkit();
+  lastCreateBody = null;
+
+  const r = await tk.run('create_transaction', { amount: 5000, kind: 'common', member_name: '김철수' });
+
+  assert.equal(r.is_error, true);
+  assert.equal(lastCreateBody, null, '상충하는 대상이 서버에 저장되면 안 된다');
+});
+
+test('개인 종류에 카테고리를 함께 지정하면 저장하지 않고 거절한다', async () => {
+  const tk = await createToolkit();
+  lastCreateBody = null;
+
+  const r = await tk.run('create_transaction', { amount: 5000, kind: 'personal', category_name: '커피' });
+
+  assert.equal(r.is_error, true);
+  assert.equal(lastCreateBody, null, '상충하는 대상이 서버에 저장되면 안 된다');
+});
+
 test('없는 팀원 이름은 후보를 제시하는 오류로 되돌려준다', async () => {
   const tk = await createToolkit();
   const r = await tk.run('create_transaction', { amount: 5000, kind: 'personal', member_name: '없는사람' });

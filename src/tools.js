@@ -43,7 +43,7 @@ const TOOL_DEFS = [
   },
   {
     name: 'create_transaction',
-    description: '지출 1건을 기입한다. 공용(common)은 category_name, 개인(personal)은 member_name이 필요하다.',
+    description: '지출 1건을 기입한다. 공용(common)은 category_name만, 개인(personal)은 member_name만 지정한다. 여러 사람이 각자 쓴 금액은 사람마다 personal로 한 번씩 호출한다.',
     input_schema: {
       type: 'object',
       properties: {
@@ -138,6 +138,18 @@ export async function createToolkit({ speaker } = {}) {
   const speakerMember = speakerMatches.length === 1 ? speakerMatches[0] : null;
   const sideEffects = []; // {action, id, summary}
 
+  const validateCreateInput = (input) => {
+    if (input.kind === 'common') {
+      if (!input.category_name || input.member_name) throw new Error('공용 지출에는 category_name만 지정해야 함');
+      return;
+    }
+    if (input.kind === 'personal') {
+      if (!input.member_name || input.category_name) throw new Error('개인 지출에는 member_name만 지정해야 함');
+      return;
+    }
+    throw new Error('지출 종류(kind)가 올바르지 않음');
+  };
+
   const hasAmounts = (row, keys) => keys.every((key) => Number.isFinite(row?.[key]));
   const memberBalance = (member) => {
     if (!hasAmounts(member, ['allocation', 'used', 'remaining'])) throw new Error(`${member.name}의 당월 개인 잔액을 확인할 수 없음`);
@@ -229,6 +241,7 @@ export async function createToolkit({ speaker } = {}) {
           return { content: JSON.stringify(transactions.slice(0, limit).map(omitInternalIds({ keepId: true }))), is_error: false };
         }
         case 'create_transaction': {
+          validateCreateInput(input);
           const body = buildBody(input);
           const { transaction } = await tmm.createTransaction(body);
           const summary = summarize({ ...transaction, category_name: categories.find((c) => c.id === transaction.period_category_id)?.name, member_name: members.find((m) => m.id === transaction.member_id)?.name });
