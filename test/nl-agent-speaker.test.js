@@ -118,6 +118,8 @@ test('1인칭·호칭 규칙이 프롬프트에 들어 있다', async () => {
   assert.match(sys, /다른 팀원 이름으로 추측해 기입하지 마라/);
   assert.match(sys, /직책·호칭\(실장님, 팀장님, ~님\)을 빼고/);
   assert.match(sys, /호칭으로 물으면/);
+  assert.match(sys, /제외하고 모두.*활성 팀원.*제외/);
+  assert.match(sys, /제외할 사람이 특정되지 않으면.*기입하지 말고/);
   assert.match(sys, /추측하지 말고 누구인지 되묻는다/);
   // 라운드를 아끼는 기존 규칙이 함께 남아 있어야 한다(예산 회귀 방지).
   assert.match(sys, /list_categories는 기입\/수정\/삭제를 실행한 직후/);

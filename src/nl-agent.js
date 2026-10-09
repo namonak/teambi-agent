@@ -71,6 +71,7 @@ ${memberLines || '- (없음)'}
 - 수정/삭제는 반드시 list_recent_transactions로 대상을 특정한 뒤 실행한다. 특정이 안 되면 실행하지 말고 후보를 보여주며 되묻는다.
 - 카테고리 이름의 지출(회식, 커피 등)은 kind=common, 특정 팀원 개인 지출은 kind=personal.
 - 팀원 이름이 둘 이상 나열되고 "각", "씩", "인당"으로 같은 금액을 말하면 인원별 개인 지출이다. 사람마다 create_transaction을 한 번씩 호출해 kind=personal과 member_name을 넣고 category_name은 넣지 마라. 예: "박형진 팀장님, 이태호, 저 11,500원씩"은 세 명의 개인 지출이다.
+- "실장님, 홍길동 제외하고 모두 12,000원 개인사용"은 활성 팀원 전체에서 지정한 사람을 제외한 인원별 개인 지출이다. 호칭도 [호칭] 목록으로 해석하고 남은 사람마다 같은 금액으로 create_transaction을 한 번씩 호출한다. 제외할 사람이 특정되지 않으면 기입하지 말고 누구인지 되묻는다.
 - 사용자가 카드를 말하지 않으면 card는 생략한다.
 - "저/제가/나/내/제" 같은 1인칭은 발화자 본인이다. 발화자가 팀원 목록에 있으면 그 이름을 member_name에 넣는다.
 - 발화자가 팀원 목록에 없거나 특정되지 않으면 1인칭 지출은 기입하지 말고 누구의 지출인지 되묻는다. 다른 팀원 이름으로 추측해 기입하지 마라.
@@ -86,6 +87,20 @@ function sideEffectsSummary(sideEffects) {
 }
 
 function personalSplitTargets(text, toolkit, speaker) {
+  // shortcut: 쉼표로 나열한 "… 제외하고 모두/전원/나머지"만 검증, 다른 제외 표현이 필요하면 확장한다.
+  const exclusion = String(text).match(/^(.+?)\s*제외하고\s*(?:모두|전원|나머지)/s);
+  if (exclusion) {
+    const excluded = new Set();
+    for (const ref of exclusion[1].split(/[,，]/)) {
+      const name = ref.trim().replace(/[을를]$/, '');
+      const found = SELF_REF_RE.test(name)
+        ? matchMembers(toolkit.members, speaker, toolkit.aliases)
+        : matchMembers(toolkit.members, name, toolkit.aliases);
+      if (found.length !== 1) return new Set();
+      excluded.add(found[0].name);
+    }
+    return new Set(toolkit.members.filter((member) => !excluded.has(member.name)).map((member) => member.name));
+  }
   if (!PER_PERSON_RE.test(text)) return null;
   const compact = String(text).replace(/\s+/g, '');
   const targets = new Set(toolkit.members.filter((member) => compact.includes(member.name.replace(/\s+/g, ''))).map((member) => member.name));
@@ -109,7 +124,7 @@ function blockInvalidPersonalSplit(text, toolkit, speaker, toolCalls) {
   for (const call of creates) {
     if (call.input.kind !== 'personal' || call.input.category_name || !call.input.member_name) return PERSONAL_SPLIT_WARNING;
     const found = matchMembers(toolkit.members, call.input.member_name, toolkit.aliases);
-    if (found.length !== 1 || !expected.has(found[0].name)) return PERSONAL_SPLIT_WARNING;
+    if (found.length !== 1 || !expected.has(found[0].name) || actual.has(found[0].name)) return PERSONAL_SPLIT_WARNING;
     actual.add(found[0].name);
   }
   if (actual.size !== expected.size || [...expected].some((name) => !actual.has(name))) return PERSONAL_SPLIT_WARNING;
