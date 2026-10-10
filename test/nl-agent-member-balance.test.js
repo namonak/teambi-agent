@@ -109,12 +109,12 @@ test('get_balance가 전체·카테고리·개인·발화자 잔액을 확정 �
     final: true,
   });
   assert.deepEqual(await tk.run('get_balance', { scope: 'member', name: '김철수' }), {
-    content: '👤 김철수 개인 잔액: 180,000원\n할당 180,000원 · 사용 0원',
+    content: '🐣 김철수 님\n- 할당량: 180,000원\n- 사용량: 0원\n- 잔액: 180,000원\n\n이번 달 개인 잔액을 알려 드립니다 💛',
     is_error: false,
     final: true,
   });
   assert.deepEqual(await tk.run('get_balance', { scope: 'self' }), {
-    content: '👤 홍길동 개인 잔액: 128,000원\n할당 180,000원 · 사용 52,000원',
+    content: '🐣 홍길동 님\n- 할당량: 180,000원\n- 사용량: 52,000원\n- 잔액: 128,000원\n\n이번 달 개인 잔액을 알려 드립니다 💛',
     is_error: false,
     final: true,
   });

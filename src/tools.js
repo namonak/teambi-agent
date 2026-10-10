@@ -153,7 +153,7 @@ export async function createToolkit({ speaker } = {}) {
   const hasAmounts = (row, keys) => keys.every((key) => Number.isFinite(row?.[key]));
   const memberBalance = (member) => {
     if (!hasAmounts(member, ['allocation', 'used', 'remaining'])) throw new Error(`${member.name}의 당월 개인 잔액을 확인할 수 없음`);
-    return `👤 ${member.name} 개인 잔액: ${fmtWon(member.remaining)}\n할당 ${fmtWon(member.allocation)} · 사용 ${fmtWon(member.used)}`;
+    return `🐣 ${member.name} 님\n- 할당량: ${fmtWon(member.allocation)}\n- 사용량: ${fmtWon(member.used)}\n- 잔액: ${fmtWon(member.remaining)}\n\n이번 달 개인 잔액을 알려 드립니다 💛`;
   };
   const balanceReply = ({ scope, name }) => {
     switch (scope) {

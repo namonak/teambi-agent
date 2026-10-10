@@ -111,7 +111,7 @@ test('Bot 사후 처리: 저의 잔액은 도구 결과를 바로 회신하고 L
   llmRequests.length = 0;
   assert.equal(
     await followUpFor({ id: 'bot-speaker-balance', text: '저의 잔액을 알려주세요.', from: { id: 'u1', name: '홍길동 (Hong Gildong)' } }),
-    '👤 홍길동 개인 잔액: 128,000원\n할당 180,000원 · 사용 52,000원',
+    '🐣 홍길동 님\n- 할당량: 180,000원\n- 사용량: 52,000원\n- 잔액: 128,000원\n\n이번 달 개인 잔액을 알려 드립니다 💛',
   );
   assert.equal(llmRequests.length, 1, '도구 결과를 다시 LLM에 맡겨 계산·재서술하지 않는다');
   assert.equal(llmRequests[0].max_tokens, 256, '자연어 해석은 작은 출력 예산으로 제한한다');
