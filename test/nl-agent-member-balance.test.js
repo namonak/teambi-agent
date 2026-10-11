@@ -119,3 +119,38 @@ test('get_balance가 전체·카테고리·개인·발화자 잔액을 확정 �
     final: true,
   });
 });
+
+test('별칭만으로 조회해도 실명과 개인 잔액을 반환한다', async () => {
+  const saved = process.env.TEAMS_MEMBER_ALIASES;
+  process.env.TEAMS_MEMBER_ALIASES = '홍길동=실장님,홍실장';
+  try {
+    const tk = await createToolkit();
+    const expected = await tk.run('get_balance', { scope: 'member', name: '홍길동' });
+    for (const name of ['실장님', '홍실장', '홍 실장님']) {
+      assert.deepEqual(await tk.run('get_balance', { scope: 'member', name }), expected);
+    }
+    assert.equal(expected.final, true);
+    assert.match(expected.content, /^🐣 홍길동 님\n/);
+    assert.doesNotMatch(expected.content, /undefined|NaN|\bid\b/);
+  } finally {
+    if (saved === undefined) delete process.env.TEAMS_MEMBER_ALIASES;
+    else process.env.TEAMS_MEMBER_ALIASES = saved;
+  }
+});
+
+test('개인 잔액 데이터가 없으면 금액을 추측하거나 빈 템플릿을 반환하지 않는다', async () => {
+  const saved = dashboardMembers;
+  dashboardMembers = [];
+  try {
+    const tk = await createToolkit({ speaker: '홍길동' });
+    for (const input of [{ scope: 'self' }, { scope: 'member', name: '홍길동' }]) {
+      const result = await tk.run('get_balance', input);
+      assert.equal(result.is_error, true);
+      assert.equal(result.final, true);
+      assert.match(result.content, /개인 잔액을 확인할 수 없음/);
+      assert.doesNotMatch(result.content, /🐣|undefined|NaN/);
+    }
+  } finally {
+    dashboardMembers = saved;
+  }
+});

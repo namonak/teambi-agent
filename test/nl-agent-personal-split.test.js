@@ -52,11 +52,12 @@ const server_ = http.createServer((req, res) => {
     if (req.url.endsWith('/chat/completions')) {
       const request = JSON.parse(body);
       if (request.messages.at(-1)?.role === 'user') {
+        const amount = request.messages.at(-1).content.includes('12,000') ? 12000 : 11500;
         const toolCalls = mode === 'wrong-kind'
           ? [{ id: 'wrong-1', type: 'function', function: { name: 'create_transaction', arguments: '{"amount":11500,"kind":"common","category_name":"간식"}' } }]
           : (selectedMembers ?? [
               ['박형진', 11], ['이태호', 12], ['백승정', 13], ['최정', 14],
-            ]).map(([member_name, id]) => ({ id: `personal-${id}`, type: 'function', function: { name: 'create_transaction', arguments: JSON.stringify({ amount: 11500, kind: 'personal', member_name }) } }));
+            ]).map(([member_name, id]) => ({ id: `personal-${id}`, type: 'function', function: { name: 'create_transaction', arguments: JSON.stringify({ amount, kind: 'personal', member_name }) } }));
         return send(res, { choices: [{ message: { role: 'assistant', content: null, tool_calls: toolCalls } }] });
       }
       return send(res, { choices: [{ message: { role: 'assistant', content: '✅ 개인 지출 4건을 등록했어요.' } }] });
@@ -122,7 +123,10 @@ test('제외하고 모두 요청은 남은 팀원만 등록한다 (각·씩 없�
   for (const request of [exclusionText, exclusionText.replace('모두', '모두 각')]) {
     submitted.length = 0;
     await runNlAgent(request, Date.now() + 5000, { speaker: '최정' });
-    assert.deepEqual(submitted.map(t => t.member_id), [13, 14]);
+    assert.deepEqual(submitted.map(({ member_id, kind, amount }) => ({ member_id, kind, amount })), [
+      { member_id: 13, kind: 'personal', amount: 12000 },
+      { member_id: 14, kind: 'personal', amount: 12000 },
+    ]);
   }
 });
 
