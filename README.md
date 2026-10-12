@@ -107,6 +107,29 @@ API 키가 없어도 카드 승인 SMS의 정규식 파싱과 키워드 분류�
 
 ## 개발
 
+### Teams 없이 CLI로 자연어 테스트
+
+프로젝트 폴더에서 `.env`를 읽어 기존 자연어 처리 함수를 직접 호출할 수 있습니다. Node.js 22+와 teamMoneyManager·LLM 설정이 필요합니다. `@장부장`은 입력하지 않습니다.
+
+~~~bash
+node --env-file=.env --input-type=module <<'JS'
+import { runNlAgent } from './src/nl-agent.js';
+
+const reply = await runNlAgent(
+  '제 잔액 알려주세요',
+  Date.now() + 60000,
+  { speaker: '홍길동', maxRounds: 5 },
+);
+console.log(reply);
+JS
+~~~
+
+질문과 `speaker`를 바꿔 테스트합니다. `speaker`는 요청을 보낸 사람의 이름이며, “제 잔액”에서 “제”를 해석하는 기준입니다. 결과는 터미널에만 표시됩니다. Teams 멘션 수신·인증·화면 표시는 이 방법으로 검증하지 않습니다.
+
+실제 `.env`를 사용하면 실제 LLM과 장부 서버에 연결합니다. 등록·수정·삭제 문장은 실제 데이터를 변경하므로 조회로 먼저 확인하고, 쓰기 테스트에는 테스트용 장부 서버를 사용하세요.
+
+### 자동 테스트와 실행
+
 ~~~
 npm test
 npm run dev
