@@ -13,7 +13,7 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@microsoft/agents-hosting": "^1.8.1",
+    "@microsoft/agents-hosting": "^1.10.2",
     "express": "^4.21.2",
     "openai": "^6.48.0"
   }
