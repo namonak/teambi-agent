@@ -1,5 +1,10 @@
 FROM node:24-bookworm-slim
 
+# 공식 node 이미지 재빌드를 기다리지 않고 Debian 보안 업데이트를 반영한다
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends \
+  && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY package.json package-lock.json ./
